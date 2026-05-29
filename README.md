@@ -205,7 +205,11 @@ cookix serve --api-key "$KEY" --rate-limit 600   # auth + 600 req/min/client
 #             COOKIX_MAX_HOPS, COOKIX_MAX_BODY_BYTES, COOKIX_READ_ONLY
 ```
 
-- **Auth** — API key (`Authorization: Bearer` / `X-API-Key`), constant-time compared.
+- **Auth + roles** — API keys (`Authorization: Bearer` / `X-API-Key`), constant-time
+  compared, each mapped to a role: `read` < `write` < `admin`. Reads need `read`,
+  inserts need `write` (`403` on insufficient role). Set `COOKIX_API_KEYS="k1:read,k2:write"`.
+- **Secure by default** — `serve` **refuses** to bind a non-loopback interface
+  without auth (override with `--insecure` / `COOKIX_ALLOW_INSECURE=1`).
 - **Rate limiting** — per-client fixed window → `429` with `Retry-After`.
 - **Resource limits** — `k`/`max_hops` clamped, request body capped (`413`).
 - **Read-only mode** — reject mutations (`403`) to serve a frozen database.
@@ -543,7 +547,7 @@ Explicitly **out of scope for v1.0**: distributed clustering/sharding, a hosted 
 - [~] **Phase 13** — Load/soak harness **shipped** (`cookix loadtest`): real server + concurrent clients, throughput/tail-latency/error-rate + memory sampling for leak detection. First run: **0 errors**, p99 ~100 ms, no leak. *Remaining: a multi-hour soak and a 1M-object run on real hardware.*
 - [~] **Phase 14** — WAL **group-commit** shipped (`group_commit=` toggle, correctness-tested). Honest finding: only ~3% here — the **single-writer lock + GIL**, not fsync, is the write bottleneck; real write-scaling needs finer-grained locking + multi-process serving. (Read replicas moved to Phase 17.)
 - [ ] **Phase 15** — Rust/PyO3 hot-path core (the deferred 1.0 item).
-- [ ] **Phase 16** — Public-facing/multi-tenant hardening (TLS, roles, namespaces, distributed rate limiting, tracing).
+- [~] **Phase 16** — **API-key roles** (read/write/admin) + **secure-by-default binding** (refuse public bind without auth) shipped and tested. *Remaining: per-tenant data isolation, distributed rate limiting (Redis), OpenTelemetry tracing, TLS reference configs.*
 - [ ] **Phase 17** — Distributed / HA: replication, failover, PITR backups.
 - [ ] **Phase 18** — Close the open-domain gap: entity linking (drop oracle), dense baseline, HotpotQA + MuSiQue.
 - [ ] **Phase 19** — Production mileage & GA — *earned over real uptime, not coded.*

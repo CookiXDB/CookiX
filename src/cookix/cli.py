@@ -47,6 +47,8 @@ def _cmd_serve(args: argparse.Namespace) -> int:
         cfg.rate_limit_rpm = args.rate_limit
     if args.read_only:
         cfg.read_only = True
+    if args.insecure:
+        cfg.allow_insecure = True
 
     where = f"http://{args.host}:{args.port}"
     print(f"CookiX server + reasoning-path explorer: {where}")
@@ -153,6 +155,8 @@ def main(argv: list[str] | None = None) -> int:
                      help="max requests per minute per client (0 = unlimited)")
     srv.add_argument("--read-only", action="store_true",
                      help="reject all mutations (serve a frozen database)")
+    srv.add_argument("--insecure", action="store_true",
+                     help="allow binding a public interface without auth (not recommended)")
     srv.set_defaults(func=_cmd_serve)
 
     ev = sub.add_parser("eval", help="run the reproducible benchmark suite")

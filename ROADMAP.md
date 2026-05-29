@@ -329,13 +329,18 @@ it is buildable; that last one is lived.
 - **Exit gate:** Rust and Python produce identical rankings; a documented
   end-to-end speedup; wheels build for Linux/macOS/Windows.
 
-## Phase 16 — Public-facing & multi-tenant hardening
+## Phase 16 — Public-facing & multi-tenant hardening — ◐ PARTIAL
 
-- TLS termination + reverse-proxy reference configs (nginx/Caddy); secure-by-
-  default deployment profile (auth + rate limit required to bind non-loopback).
-- Multiple API keys with **roles** (read/write/admin), per-tenant **namespaces**
-  with isolation, and **distributed rate limiting** (shared store, e.g. Redis).
-- Audit logging + request tracing (OpenTelemetry).
+- **Done:** **API-key roles** — keys map to `read` < `write` < `admin`; read
+  endpoints require `read`, mutations require `write` (`403` on insufficient
+  role), constant-time matched (`COOKIX_API_KEYS="k:role,…"`). **Secure-by-
+  default binding:** `serve` refuses a non-loopback bind without auth unless
+  `--insecure` / `COOKIX_ALLOW_INSECURE=1`. Both tested; the demo Docker image
+  opts into insecure explicitly (documented) while the library stays strict.
+- **Remaining:** per-tenant **data isolation** (namespaces / DB-per-tenant
+  routing — a real design change), **distributed rate limiting** (shared store
+  like Redis — needs that infra), **OpenTelemetry** tracing, and TLS / reverse-
+  proxy reference configs. An external security review is also part of the gate.
 - **Exit gate:** a documented multi-tenant deployment, an external security
   review with high/criticals resolved, and a pen-test checklist run.
 

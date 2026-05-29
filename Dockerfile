@@ -26,7 +26,11 @@ WORKDIR /home/cookix
 USER cookix
 
 ENV PYTHONUNBUFFERED=1 \
-    COOKIX_METRICS=1
+    COOKIX_METRICS=1 \
+    # This demo image binds 0.0.0.0 with no auth, so it opts into insecure mode.
+    # FOR PRODUCTION: set COOKIX_API_KEY (or COOKIX_API_KEYS) instead — when a key
+    # is set, auth is enforced and this flag is irrelevant.
+    COOKIX_ALLOW_INSECURE=1
 
 EXPOSE 8000
 

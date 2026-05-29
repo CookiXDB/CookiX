@@ -7,6 +7,11 @@ All notable changes to CookiX are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- **API-key roles + secure-by-default binding (Phase 16)** — keys map to
+  `read`/`write`/`admin` (`COOKIX_API_KEYS="k:role,…"`); reads need `read`,
+  mutations need `write` (`403` otherwise). `serve` now refuses to bind a
+  non-loopback interface without auth unless `--insecure` /
+  `COOKIX_ALLOW_INSECURE=1`.
 - **WAL group-commit (Phase 14)** — concurrent writers share a single `fsync`
   instead of one apiece (`DurableBackend(..., group_commit=True)`, default on),
   correctness preserved in both modes. Measured ~3% here (the global write lock

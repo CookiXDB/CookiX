@@ -21,6 +21,13 @@ multi-tenant service.
 - **Unauthenticated access** — set `COOKIX_API_KEY` (or `--api-key`) to require
   `Authorization: Bearer <key>` / `X-API-Key` on all data endpoints. The key is
   compared in constant time (`hmac.compare_digest`).
+- **Over-privileged keys** — `COOKIX_API_KEYS="k1:read,k2:write,k3:admin"` issues
+  role-scoped keys: read endpoints need `read`, mutations need `write`. A
+  read-only key cannot write (`403`).
+- **Accidental public exposure** — `serve` refuses to bind a non-loopback
+  interface without auth unless you explicitly pass `--insecure` /
+  `COOKIX_ALLOW_INSECURE=1`. (The demo Docker image sets this flag on purpose;
+  set an API key for any real deployment.)
 - **Request floods** — `COOKIX_RATE_LIMIT_RPM` enables a per-client fixed-window
   rate limiter returning `429`.
 - **Resource-exhausting queries** — `k` and `max_hops` are clamped to configured

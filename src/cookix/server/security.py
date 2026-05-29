@@ -33,17 +33,23 @@ from dataclasses import dataclass, field
 logger = logging.getLogger("cookix.server")
 
 
+# Role hierarchy for API keys: a higher rank implies every lower capability.
+ROLE_RANK = {"read": 0, "write": 1, "admin": 2}
+
+
 @dataclass
 class ServerConfig:
     """Operational policy for the HTTP server. All protections default to off."""
 
-    api_key: str | None = None
+    api_key: str | None = None       # shorthand: a single admin key
+    api_keys: dict[str, str] = field(default_factory=dict)  # key -> role
     rate_limit_rpm: int = 0          # requests/minute/client; 0 disables
     max_body_bytes: int = 1_000_000  # 1 MB request-body cap
     max_k: int = 100                 # upper bound on retrieval k
     max_hops_limit: int = 8          # upper bound on traversal depth
     read_only: bool = False          # reject mutations
     enable_metrics: bool = True
+    allow_insecure: bool = False     # permit binding a public iface without auth
 
     @classmethod
     def from_env(cls) -> ServerConfig:
@@ -52,19 +58,57 @@ class ServerConfig:
             raw = os.environ.get(name)
             return int(raw) if raw and raw.isdigit() else default
 
+        # COOKIX_API_KEYS = "key1:write,key2:read,key3:admin"
+        keys: dict[str, str] = {}
+        for pair in (os.environ.get("COOKIX_API_KEYS") or "").split(","):
+            pair = pair.strip()
+            if ":" in pair:
+                k, role = pair.rsplit(":", 1)
+                if role.strip() in ROLE_RANK:
+                    keys[k.strip()] = role.strip()
+
         return cls(
             api_key=os.environ.get("COOKIX_API_KEY") or None,
+            api_keys=keys,
             rate_limit_rpm=_int("COOKIX_RATE_LIMIT_RPM", 0),
             max_body_bytes=_int("COOKIX_MAX_BODY_BYTES", 1_000_000),
             max_k=_int("COOKIX_MAX_K", 100),
             max_hops_limit=_int("COOKIX_MAX_HOPS", 8),
             read_only=os.environ.get("COOKIX_READ_ONLY", "").lower() in ("1", "true", "yes"),
             enable_metrics=os.environ.get("COOKIX_METRICS", "1").lower() not in ("0", "false"),
+            allow_insecure=os.environ.get("COOKIX_ALLOW_INSECURE", "").lower()
+            in ("1", "true", "yes"),
         )
 
     @property
     def auth_enabled(self) -> bool:
-        return bool(self.api_key)
+        return bool(self.api_key or self.api_keys)
+
+    def _effective_keys(self) -> dict[str, str]:
+        keys = dict(self.api_keys)
+        if self.api_key:
+            keys.setdefault(self.api_key, "admin")
+        return keys
+
+    def role_for(self, provided: str | None) -> str | None:
+        """Resolve a presented key to its role, or ``None`` if it is invalid.
+
+        When auth is disabled, every request is treated as ``admin``. The match is
+        constant-time and checks every configured key (no early-out on length).
+        """
+        if not self.auth_enabled:
+            return "admin"
+        matched: str | None = None
+        for key, role in self._effective_keys().items():
+            if hmac.compare_digest(provided or "", key):
+                matched = role
+        return matched
+
+    def has_role(self, provided: str | None, required: str) -> bool:
+        role = self.role_for(provided)
+        if role is None:
+            return False
+        return ROLE_RANK[role] >= ROLE_RANK[required]
 
 
 # --------------------------------------------------------------------------- #

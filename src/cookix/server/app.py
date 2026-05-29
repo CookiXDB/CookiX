@@ -24,10 +24,11 @@ from .security import (
     Metrics,
     RateLimiter,
     ServerConfig,
-    check_api_key,
     extract_key,
     log_request,
 )
+
+_LOOPBACK = {"127.0.0.1", "localhost", "::1"}
 
 _STATIC_DIR = Path(__file__).parent / "static"
 
@@ -165,28 +166,38 @@ def create_app(db: Database, config: ServerConfig | None = None) -> Any:
         log_request(request.method, request.url.path, response.status_code, elapsed, client)
         return response
 
-    def require_auth(
-        authorization: str | None = Header(default=None),
-        x_api_key: str | None = Header(default=None),
-    ) -> None:
-        """FastAPI dependency: enforce the API key on protected endpoints.
-
-        Reads the key from ``Authorization: Bearer <key>`` or ``X-API-Key``. Uses
-        header parameters (not the raw Request) so the annotation resolves cleanly
-        under ``from __future__ import annotations``.
-        """
-        if not cfg.auth_enabled:
-            return
-        provided = None
+    def _provided_key(authorization: str | None, x_api_key: str | None) -> str | None:
         if authorization and authorization.lower().startswith("bearer "):
-            provided = authorization[7:].strip()
-        elif x_api_key:
-            provided = x_api_key
-        if not check_api_key(provided, cfg.api_key):
-            metrics.inc_auth_failure()
-            raise HTTPException(status_code=401, detail="invalid or missing API key")
+            return authorization[7:].strip()
+        return x_api_key
 
-    auth = [Depends(require_auth)]
+    def require(role: str):
+        """Build a dependency enforcing at least ``role`` (read < write < admin).
+
+        Header params (not the raw Request) keep the annotation resolvable under
+        ``from __future__ import annotations``.
+        """
+        def dep(
+            authorization: str | None = Header(default=None),
+            x_api_key: str | None = Header(default=None),
+        ) -> None:
+            if not cfg.auth_enabled:
+                return
+            provided = _provided_key(authorization, x_api_key)
+            resolved = cfg.role_for(provided)
+            if resolved is None:
+                metrics.inc_auth_failure()
+                raise HTTPException(status_code=401, detail="invalid or missing API key")
+            if not cfg.has_role(provided, role):
+                raise HTTPException(
+                    status_code=403,
+                    detail=f"this key has role '{resolved}'; '{role}' required",
+                )
+
+        return dep
+
+    read_auth = [Depends(require("read"))]
+    write_auth = [Depends(require("write"))]
 
     @app.get("/api/info")
     def info() -> dict[str, Any]:
@@ -222,16 +233,16 @@ def create_app(db: Database, config: ServerConfig | None = None) -> Any:
             raise HTTPException(status_code=404, detail="metrics disabled")
         return PlainTextResponse(metrics.render_prometheus())
 
-    @app.get("/api/graph", dependencies=auth)
+    @app.get("/api/graph", dependencies=read_auth)
     def graph() -> dict[str, Any]:
         return _serialize_graph(db)
 
-    @app.get("/api/sheaf", dependencies=auth)
+    @app.get("/api/sheaf", dependencies=read_auth)
     def sheaf_geometry() -> dict[str, Any]:
         """Stalks as 3D unit vectors + the edges connecting them."""
         return _serialize_sheaf(db, dim=3)
 
-    @app.post("/api/sheaf/trace", dependencies=auth)
+    @app.post("/api/sheaf/trace", dependencies=read_auth)
     def sheaf_trace(payload: dict = Body(...)) -> dict[str, Any]:
         """Carry an object's stalk along a reasoning path, step by step.
 
@@ -291,7 +302,7 @@ def create_app(db: Database, config: ServerConfig | None = None) -> Any:
             "residual": residual,
         }
 
-    @app.post("/api/insert", dependencies=auth)
+    @app.post("/api/insert", dependencies=write_auth)
     def insert(payload: dict = Body(...)) -> dict[str, str]:
         if cfg.read_only:
             raise HTTPException(status_code=403, detail="server is read-only")
@@ -301,7 +312,7 @@ def create_app(db: Database, config: ServerConfig | None = None) -> Any:
         obj_id = db.insert(document)
         return {"id": obj_id}
 
-    @app.post("/api/query", dependencies=auth)
+    @app.post("/api/query", dependencies=read_auth)
     def query(payload: dict = Body(...)) -> dict[str, Any]:
         # Clamp resource-bounding parameters so one request cannot ask the engine
         # to do unbounded work.
@@ -371,11 +382,22 @@ def serve(
 
     logging.basicConfig(level=logging.INFO)  # surface the structured access logs
 
+    cfg = config or ServerConfig.from_env()
+
+    # Secure by default: refuse to expose an unauthenticated server on a
+    # non-loopback interface unless the operator explicitly opts into it.
+    if host not in _LOOPBACK and not cfg.auth_enabled and not cfg.allow_insecure:
+        raise RuntimeError(
+            f"refusing to bind {host} without authentication. Set an API key "
+            "(COOKIX_API_KEY / --api-key) for a network-exposed server, or set "
+            "COOKIX_ALLOW_INSECURE=1 to override (not recommended)."
+        )
+
     if db is None:
         from ..demos import DEMOS
 
         builder = DEMOS.get(demo or "umbrella")
         db = builder() if builder else Database()
 
-    app = create_app(db, config)
+    app = create_app(db, cfg)
     uvicorn.run(app, host=host, port=port)
