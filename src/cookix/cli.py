@@ -4,6 +4,7 @@
     cookix demo umbrella        # run a built-in demo scenario
     cookix demo pipe
     cookix serve                # launch the HTTP server + reasoning-path UI
+    cookix eval                 # run the reproducible benchmark suite
 """
 
 from __future__ import annotations
@@ -48,6 +49,14 @@ def _cmd_serve(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_eval(args: argparse.Namespace) -> int:
+    from .eval import run_benchmark, to_json, to_markdown
+
+    report = run_benchmark(seed=args.seed, n_worlds=args.worlds, k=args.k)
+    print(to_json(report) if args.json else to_markdown(report))
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="cookix", description=__doc__)
     parser.add_argument("--version", action="version", version=f"cookix {__version__}")
@@ -67,6 +76,14 @@ def main(argv: list[str] | None = None) -> int:
     srv.add_argument("--host", default="127.0.0.1")
     srv.add_argument("--port", type=int, default=8000)
     srv.set_defaults(func=_cmd_serve)
+
+    ev = sub.add_parser("eval", help="run the reproducible benchmark suite")
+    ev.add_argument("--seed", type=int, default=0, help="RNG seed (default: 0)")
+    ev.add_argument("--worlds", type=int, default=40,
+                    help="number of synthetic worlds, <=80 (default: 40)")
+    ev.add_argument("--k", type=int, default=5, help="retrieval cutoff k (default: 5)")
+    ev.add_argument("--json", action="store_true", help="emit JSON instead of Markdown")
+    ev.set_defaults(func=_cmd_eval)
 
     args = parser.parse_args(argv)
     return args.func(args)

@@ -14,6 +14,7 @@
   <a href="#quickstart">Quickstart</a> •
   <a href="#how-it-works">How it works</a> •
   <a href="#the-honest-status">Honest status</a> •
+  <a href="#benchmarks">Benchmarks</a> •
   <a href="#roadmap">Roadmap</a> •
   <a href="#contributing">Contributing</a>
 </p>
@@ -165,9 +166,60 @@ CookiX is built to **test** the NoVectDB paradigm, not to oversell it. Being str
 
 - ✅ **The typed-graph core works and is well-founded.** Typed relational retrieval beating flat vector similarity on relational/multi-hop/contradiction queries is established across the knowledge-graph and GraphRAG literature.
 - 🧪 **Persistent homology (𝒯) and sheaf composition (𝒮) are open research bets.** They are implemented as *optional, ablatable* layers precisely so their contribution can be **measured** against the graph-only baseline — not assumed. The sheaf restriction maps are currently a deterministic placeholder; *learning* them is future work.
-- 📊 **Benchmarks are being reproduced.** The numbers in the paper come from a curated synthetic corpus. A public, reproducible evaluation harness (HotpotQA, 2WikiMultiHopQA, MuSiQue + fair GraphRAG/KG baselines + ablations) is the current priority — see the roadmap.
+- 📊 **The benchmark harness now ships in-repo and is reproducible from a single seed** (`cookix eval`). It runs on a synthetic relational corpus against fair baselines and every ablation; see [Benchmarks](#benchmarks) below. Porting it to external multi-hop datasets (HotpotQA, 2WikiMultiHopQA, MuSiQue) is the next step.
 
 If the exotic layers don't earn their keep in honest ablations, we'll say so. That's the point.
+
+---
+
+## Benchmarks
+
+CookiX ships a **deterministic, reproducible** evaluation suite. One seed fixes the
+corpus, the baselines, and every reported number:
+
+```bash
+cookix eval                       # Markdown table (defaults: seed=0, 40 worlds, k=5)
+cookix eval --worlds 80 --json    # machine-readable
+```
+
+The corpus is a **steelman, not a strawman**: every entity's text describes the
+entity *itself* (never its relations), and entities in a world share a topical
+adjective — so a content/vector retriever genuinely retrieves the right
+*neighbourhood*. The relational answer lives **only** in the typed edges, so
+recovering it requires traversal, not proximity. All retrievers see the same
+natural-language query and are scored identically.
+
+Baselines: a **random** no-skill floor, and **`lexical-tfidf`** — TF-IDF cosine
+over content, standing in for the vector-similarity family (a dense embedder
+plugs into the same interface and behaves the same way with respect to
+*relations*: it retrieves by topical proximity, not traversal).
+
+`seed=0`, 40 worlds (240 documents, 160 queries spanning single-hop forward,
+single-hop inverse, multi-hop, and contradiction), `k=5`:
+
+| retriever | hits@1 | hits@5 | precision@5 | recall@5 | mrr | path_acc |
+|---|---|---|---|---|---|---|
+| random | 0.006 | 0.019 | 0.004 | 0.019 | 0.010 | 0.000 |
+| lexical-tfidf | 0.250 | 0.750 | 0.150 | 0.750 | 0.375 | 0.000 |
+| cookix-graph | 1.000 | 1.000 | 0.200 | 1.000 | 1.000 | 1.000 |
+| cookix-topo | 1.000 | 1.000 | 0.200 | 1.000 | 1.000 | 1.000 |
+| cookix-sheaf | 1.000 | 1.000 | 0.200 | 1.000 | 1.000 | 1.000 |
+| cookix-reasoning | 1.000 | 1.000 | 0.200 | 1.000 | 1.000 | 1.000 |
+
+Reading the numbers honestly:
+
+- **The lexical baseline is real, not a punching bag.** It reaches `recall@5 = 0.75`
+  because the shared adjective lets it pull the correct world's neighbourhood. But
+  its `hits@1` is only `0.25` — it cannot pick the relationally-correct entity out
+  of that neighbourhood, and its `path_acc` is **0** because content similarity
+  structurally cannot produce a reasoning path.
+- **CookiX recovers the exact relational target and the gold path** on this corpus,
+  which is what the typed-graph core is built to do.
+- **`topo`/`sheaf`/`reasoning` match `graph` here** — on a corpus this clean the
+  graph core already saturates, so the exotic layers have no headroom to
+  demonstrate. Their value has to be shown on harder, noisier data; that's exactly
+  why they remain *ablatable* and why honest external benchmarks are the next
+  roadmap item. We are not claiming 𝒯/𝒮 help yet.
 
 ---
 
@@ -185,7 +237,7 @@ If the exotic layers don't earn their keep in honest ablations, we'll say so. Th
 - [x] **Phase 0** — Typed-graph core: Knowledge Objects, deterministic lookup, geodesic traversal, interpretable paths
 - [x] **Phase 0** — Optional topology + sheaf layers behind ablation switches
 - [x] **Phase 0** — HTTP server (`cookix serve`) + browser reasoning-path explorer UI
-- [ ] **Phase 1** — Public reproducible benchmark harness (vector / GraphRAG / KG baselines + ablations)
+- [x] **Phase 1** — Reproducible benchmark harness (`cookix eval`): synthetic relational corpus, fair vector-family + no-skill baselines, all ablations, deterministic from one seed. *Next: port to external multi-hop datasets.*
 - [ ] **Phase 2** — LLM relation extraction quality study (extraction error is the multi-hop ceiling)
 - [ ] **Phase 3** — Learned sheaf restriction maps (neural sheaf diffusion)
 - [ ] **Phase 4** — Durable Kùzu backend hardening + TopoIndex (ANN over persistence diagrams)
