@@ -20,10 +20,16 @@
 </p>
 
 <p align="center">
+  <a href="https://pypi.org/project/cookix/"><img src="https://img.shields.io/pypi/v/cookix.svg?color=e0a458" alt="PyPI" /></a>
   <img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="License" />
   <img src="https://img.shields.io/badge/python-3.10%2B-green.svg" alt="Python" />
   <img src="https://img.shields.io/badge/paradigm-NoVectDB-blueviolet.svg" alt="NoVectDB" />
   <img src="https://img.shields.io/badge/built%20in-Morocco%20%F0%9F%87%B2%F0%9F%87%A6-red.svg" alt="Built in Morocco" />
+</p>
+
+<p align="center">
+  <strong>CookiX answers relational questions with the reasoning <em>path</em> that proves them.</strong><br>
+  <code>pip install cookix</code> · model your domain as typed edges · get explainable multi-hop retrieval — no server, no infra.
 </p>
 
 ---
@@ -42,6 +48,38 @@ Vector databases embed everything into flat ℝⁿ and retrieve by cosine distan
 CookiX stores knowledge as **Knowledge Objects** in a typed, directed graph and retrieves by traversing relations — returning the *path* that justifies each answer.
 
 > **MongoDB is to NoSQL** what **CookiX is to NoVectDB.**
+
+---
+
+## Who should use CookiX?
+
+**✅ Reach for CookiX when:**
+- You can model your domain as **typed, directed relationships** — dependencies,
+  drug interactions, prerequisites, citations, part compatibility, org structure.
+- You need the answer to arrive **with the chain that justifies it** — auditable
+  RAG, compliance, "explain *why* this was retrieved."
+- You want a **`pip install`, embedded Python library** — zero infra, runs
+  in-process or as a small server.
+
+**🚫 Don't reach for CookiX (yet) when:**
+- Your data is **unstructured text you can't turn into edges** — open-domain
+  triple extraction + entity linking is the current bottleneck (see
+  [Honest status](#what-10-is--and-is-not)).
+- You need **pure semantic similarity** over text — that's a vector DB's job.
+- You need **multi-node / distributed scale** — CookiX 1.x is single-node.
+
+**When to reach for what (honest):**
+
+| If you need… | Use |
+|---|---|
+| Fuzzy semantic search over unstructured text | a **vector DB** (FAISS, pgvector, Pinecone) |
+| A production graph DB at scale — Cypher, clustering | **Neo4j / Kùzu** |
+| LLM answers grounded in a knowledge graph | **GraphRAG** + an LLM |
+| **Embedded, explainable, typed multi-hop retrieval — the _path_ as the answer** | **CookiX** |
+
+CookiX isn't trying to beat Neo4j at graph scale or a vector DB at fuzzy search.
+Its niche is the overlap none of them own: **explainable relational retrieval you
+can `pip install`.**
 
 ---
 
@@ -81,8 +119,20 @@ Try the built-in demos:
 
 ```bash
 cookix demo umbrella
-cookix demo pipe
+cookix demo deps     # software supply-chain: which services a CVE reaches, and how
 cookix info          # shows which optional layers are active
+```
+
+**A real example — software supply-chain impact** ([`examples/supply_chain.py`](examples/supply_chain.py)):
+*"when a CVE drops, which of my services are affected, and through which
+dependency chain?"* A service `depends_on` a library that `depends_on` another
+that is `affected_by` the CVE — CookiX returns the exact chain and the blast
+radius. `checkout_api` and `CVE_2024_5001` share no words and sit far apart in
+any embedding space; the link lives only in the typed edges.
+
+```bash
+python examples/supply_chain.py     # prints the blast radius with paths
+cookix serve --demo deps            # explore the same graph in the browser UI
 ```
 
 ---

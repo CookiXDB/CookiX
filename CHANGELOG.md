@@ -6,6 +6,15 @@ All notable changes to CookiX are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.1.8] - 2026-05-29
+
+### Changed
+- **Sharper positioning for adoption** (README + PyPI landing page): a one-line
+  value proposition, a PyPI version badge, a **"Who should use CookiX?"** section
+  (when to use it / when not), an honest **when-to-reach-for-what** table (vector
+  DB vs Neo4j/Kùzu vs GraphRAG vs CookiX), and the supply-chain example promoted
+  as the headline real-world quickstart.
+
 ## [1.1.7] - 2026-05-29
 
 ### Added
