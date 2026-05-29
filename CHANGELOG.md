@@ -6,6 +6,15 @@ All notable changes to CookiX are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-05-29
+
+The hardening release: post-1.0 work toward production-readiness. Read-only
+follower replicas, API-key roles + secure-by-default binding, WAL group-commit,
+a load/soak harness, non-oracle entity-linking evaluation, release automation
+(Docker + PyPI OIDC), an ops runbook, a Grafana dashboard, and model-based fuzz
+tests. Single-node scope and the honest open items (Rust core, distributed HA,
+lived production mileage) are unchanged — see ROADMAP.md.
+
 ### Added
 - **Operational groundwork (Phase 19)** — an on-call `RUNBOOK.md`, a Grafana
   dashboard (`ops/grafana-dashboard.json`) for the `/metrics` endpoint, and
