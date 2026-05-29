@@ -517,7 +517,7 @@ Explicitly **out of scope for v1.0**: distributed clustering/sharding, a hosted 
 
 **Road to fully production-hardened (post-1.0).** v1.0 is production-ready for a *controlled single-node* deployment; making it safe for public-internet / multi-tenant / high-scale use is a further eight phases (12–19), each with a hard exit gate — see [ROADMAP.md](ROADMAP.md#road-to-fully-production-hardened-post-10):
 
-- [ ] **Phase 12** — Build+run Docker in CI, publish to GHCR + PyPI (OIDC), image scanning.
+- [~] **Phase 12** — CI **wired**: a `Docker` workflow builds → runs → smoke-tests `/healthz` → Trivy-scans → pushes to GHCR on tags, and a `Release` workflow builds + verifies the wheel in a clean venv + publishes to PyPI via OIDC trusted publishing. *Gate confirms on the first tagged run after a maintainer configures the PyPI trusted publisher (see [RELEASING.md](RELEASING.md)).*
 - [ ] **Phase 13** — Load & soak testing (1M+ objects, sustained hours, fault injection).
 - [ ] **Phase 14** — Group-commit + finer-grained concurrency; read replicas.
 - [ ] **Phase 15** — Rust/PyO3 hot-path core (the deferred 1.0 item).

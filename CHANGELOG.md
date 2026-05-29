@@ -6,6 +6,13 @@ All notable changes to CookiX are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+- **Release automation (Phase 12)** — a `Docker` CI workflow that builds, runs,
+  smoke-tests (`/healthz` + `/readyz`), Trivy-scans, and (on tags) pushes the
+  image to GHCR; and a `Release` workflow that builds + `twine check`s +
+  clean-venv-verifies the wheel and publishes to PyPI via OIDC trusted publishing.
+  Maintainer setup documented in `RELEASING.md`.
+
 ## [1.0.0] - 2026-05-29
 
 First production release: a single-node topological-relational database that is

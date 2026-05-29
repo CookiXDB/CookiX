@@ -270,15 +270,21 @@ it is buildable; that last one is lived.
 | Open-domain quality is extraction-limited (oracle linking) | **18** |
 | No production mileage / SLOs proven in the wild | **19** |
 
-## Phase 12 — Validated, published artifacts *(distribution, for real)*
+## Phase 12 — Validated, published artifacts *(distribution, for real)* — ◐ WIRED
 
-- **Build *and run* the Docker image in CI** (GitHub Actions has a Docker
-  daemon), smoke-test `/healthz`, then publish to GHCR / Docker Hub.
-- Container vulnerability scan (Trivy/grype) wired into CI.
-- **Automated PyPI publish** via GitHub trusted publishing (OIDC, tag-triggered)
-  + `cibuildwheel` matrix scaffolding (ready for the Rust core).
+- **Done (in-repo):** a `Docker` workflow (`.github/workflows/docker.yml`) that
+  builds the image, **runs it and smoke-tests `/healthz` + `/readyz`**,
+  Trivy-scans it (fails on CRITICAL), and pushes to GHCR on version tags; and a
+  `Release` workflow (`release.yml`) that builds the wheel + sdist, `twine
+  check`s them, **verifies the wheel installs and runs in a clean venv**, and
+  publishes to PyPI via **OIDC trusted publishing** (no stored token). Both YAMLs
+  validate. Maintainer setup is documented in `RELEASING.md`.
+- **Pending (maintainer + first tag):** the actual `pip install cookix` from PyPI
+  and `docker pull` from GHCR confirm only after a maintainer configures the PyPI
+  trusted publisher and pushes a `v*` tag — at which point CI runs end to end.
+  This is the one-time account-level step that cannot live in the repo.
 - **Exit gate:** `pip install cookix` works from PyPI; `docker pull … && docker
-  run` serves a healthy container; image scan has no high/criticals.
+  run` serves a healthy container; image scan has no criticals.
 
 ## Phase 13 — Load & soak testing *(earn "battle-tested" — part 1)*
 

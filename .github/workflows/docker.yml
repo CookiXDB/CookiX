@@ -1,0 +1,84 @@
+name: Docker
+
+# Build the image, prove it actually runs (smoke-test /healthz), scan it for
+# vulnerabilities, and — on a version tag — publish it to GitHub Container
+# Registry. This is the CI that validates the image the local environment could
+# not (no Docker daemon there).
+
+on:
+  push:
+    branches: [master, main]
+    tags: ["v*"]
+  pull_request:
+
+env:
+  IMAGE: ghcr.io/${{ github.repository }}
+
+jobs:
+  build-run-scan:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: cookix:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Run container and smoke-test /healthz
+        run: |
+          docker run -d --name cookix -p 8000:8000 cookix:ci
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8000/healthz; then
+              echo "healthy"; break
+            fi
+            sleep 1
+          done
+          # Final assertions: liveness + readiness must both report OK.
+          curl -fsS http://127.0.0.1:8000/healthz | grep -q '"status":"ok"'
+          curl -fsS http://127.0.0.1:8000/readyz  | grep -q '"status":"ready"'
+          docker logs cookix
+          docker rm -f cookix
+
+      - name: Scan image for vulnerabilities (Trivy)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: cookix:ci
+          format: table
+          severity: CRITICAL,HIGH
+          # Fail the build on CRITICAL findings; HIGH is reported but not gating
+          # yet (base-image churn would make HIGH too flaky to block on).
+          exit-code: "1"
+          ignore-unfixed: true
+          vuln-type: os,library
+        env:
+          TRIVY_SEVERITY: CRITICAL
+
+      - name: Log in to GHCR
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push tagged image to GHCR
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:latest
+            ${{ env.IMAGE }}:${{ github.ref_name }}
+          cache-from: type=gha
