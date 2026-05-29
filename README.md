@@ -51,6 +51,7 @@ pip install cookix                 # core (graph traversal, zero heavy deps)
 pip install "cookix[topology]"     # + persistent-homology re-ranking
 pip install "cookix[kuzu]"         # + durable embedded graph storage
 pip install "cookix[llm]"          # + LLM relation extraction
+pip install "cookix[server]"       # + HTTP server & reasoning-path explorer UI
 pip install "cookix[all]"          # everything
 ```
 
@@ -81,6 +82,28 @@ Try the built-in demos:
 cookix demo umbrella
 cookix demo pipe
 cookix info          # shows which optional layers are active
+```
+
+---
+
+## The reasoning-path explorer
+
+A vector database can only show you a blob and a distance. CookiX can show you **why** — the typed path that justifies each answer, as an interactive graph.
+
+```bash
+pip install "cookix[server]"
+cookix serve                 # opens an HTTP API + UI at http://127.0.0.1:8000
+cookix serve --demo pipe     # start from the pipe-compatibility demo
+```
+
+Open the browser UI, type a natural-language query (e.g. *"what prevents rain?"*), and the matching reasoning path lights up on the graph. Switch the **ablation mode** in the UI to see exactly what the topology and sheaf layers add on top of pure graph traversal.
+
+The server also exposes the database over HTTP for non-Python clients:
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/query \
+  -H "Content-Type: application/json" \
+  -d '{"query": "what prevents rain?", "mode": "reasoning"}'
 ```
 
 ---
@@ -145,6 +168,7 @@ If the exotic layers don't earn their keep in honest ablations, we'll say so. Th
 
 - [x] **Phase 0** — Typed-graph core: Knowledge Objects, deterministic lookup, geodesic traversal, interpretable paths
 - [x] **Phase 0** — Optional topology + sheaf layers behind ablation switches
+- [x] **Phase 0** — HTTP server (`cookix serve`) + browser reasoning-path explorer UI
 - [ ] **Phase 1** — Public reproducible benchmark harness (vector / GraphRAG / KG baselines + ablations)
 - [ ] **Phase 2** — LLM relation extraction quality study (extraction error is the multi-hop ceiling)
 - [ ] **Phase 3** — Learned sheaf restriction maps (neural sheaf diffusion)

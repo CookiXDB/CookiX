@@ -108,21 +108,40 @@ class RuleBasedExtractor:
         """
         lowered = query.lower()
         relation = None
+        keyword_idx = -1
         for keyword, rel_name in _KEYWORD_MAP:
-            if keyword in lowered:
+            idx = lowered.find(keyword)
+            if idx != -1:
                 relation = rel_name
+                keyword_idx = idx
                 break
 
-        matches: list[str] = []
+        # Match known ids and remember where each appears, so we can order
+        # anchor/target by their position in the query.
+        positioned: list[tuple[int, str]] = []
         for obj_id in sorted(known_ids, key=len, reverse=True):
-            if obj_id.lower() in lowered and obj_id not in matches:
-                matches.append(obj_id)
+            pos = lowered.find(obj_id.lower())
+            if pos != -1 and all(obj_id != m[1] for m in positioned):
+                positioned.append((pos, obj_id))
+        positioned.sort(key=lambda m: m[0])
+        matches = [obj_id for _, obj_id in positioned]
 
         intent = Intent(relation=relation)
         if matches:
             intent.anchor = matches[0]
         if len(matches) > 1:
             intent.target = matches[1]
+
+        # Single-entity query where the entity follows the relation verb means
+        # the entity is the grammatical *object* ("what prevents rain?" -> rain
+        # is what gets prevented). Resolve via the inverse relation so traversal
+        # walks the stored edge backwards to find the subject.
+        if relation and len(matches) == 1 and keyword_idx != -1 and positioned[0][0] > keyword_idx:
+            inverse = relations.inverse_of(relation)
+            if inverse is not None:
+                relation = inverse
+                intent.relation = inverse
+
         if relation:
             intent.relation_chain = [relation]
         return intent

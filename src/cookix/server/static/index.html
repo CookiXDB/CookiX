@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>CookiX — Reasoning-Path Explorer</title>
+  <script src="https://unpkg.com/vis-network@9.1.9/standalone/umd/vis-network.min.js"></script>
+  <style>
+    :root {
+      --bg: #1a1410; --panel: #241b14; --edge: #6b5644; --line: #3a2d22;
+      --text: #f3ead9; --muted: #b09b82; --accent: #e0a458; --path: #ff7a45;
+      --node: #4a3b2c; --node-border: #8a6f52;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; font-family: "Segoe UI", system-ui, sans-serif;
+      background: var(--bg); color: var(--text); height: 100vh;
+      display: grid; grid-template-columns: 360px 1fr; grid-template-rows: 56px 1fr;
+      grid-template-areas: "header header" "sidebar graph";
+    }
+    header {
+      grid-area: header; display: flex; align-items: center; gap: 12px;
+      padding: 0 18px; background: var(--panel); border-bottom: 1px solid var(--line);
+    }
+    header img { width: 32px; height: 32px; border-radius: 6px; }
+    header h1 { font-size: 18px; margin: 0; font-weight: 600; }
+    header .tag { color: var(--muted); font-size: 12px; }
+    header .stats { margin-left: auto; color: var(--muted); font-size: 13px; }
+    aside {
+      grid-area: sidebar; background: var(--panel); border-right: 1px solid var(--line);
+      padding: 18px; overflow-y: auto; display: flex; flex-direction: column; gap: 14px;
+    }
+    label { font-size: 12px; color: var(--muted); display: block; margin-bottom: 4px; }
+    input, select, textarea {
+      width: 100%; background: var(--bg); border: 1px solid var(--line);
+      color: var(--text); border-radius: 7px; padding: 9px 11px; font-size: 14px;
+      font-family: inherit;
+    }
+    input:focus, select:focus, textarea:focus { outline: 1px solid var(--accent); }
+    button {
+      background: var(--accent); color: #1a1410; border: none; border-radius: 7px;
+      padding: 10px 14px; font-size: 14px; font-weight: 600; cursor: pointer; width: 100%;
+    }
+    button:hover { filter: brightness(1.08); }
+    .row { display: flex; gap: 8px; }
+    .row > * { flex: 1; }
+    h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em;
+      color: var(--muted); margin: 6px 0 0; }
+    #results { display: flex; flex-direction: column; gap: 10px; }
+    .result {
+      background: var(--bg); border: 1px solid var(--line); border-radius: 8px;
+      padding: 11px 12px; cursor: pointer; transition: border-color .12s;
+    }
+    .result:hover { border-color: var(--accent); }
+    .result .chain { font-size: 13px; line-height: 1.5; }
+    .result .rel { color: var(--accent); }
+    .result .meta { color: var(--muted); font-size: 11px; margin-top: 6px;
+      font-family: ui-monospace, monospace; }
+    .result .content { color: var(--muted); font-size: 12px; margin-top: 4px; font-style: italic; }
+    #graph { grid-area: graph; height: 100%; }
+    .empty { color: var(--muted); font-size: 13px; font-style: italic; }
+    .hint { font-size: 11px; color: var(--muted); margin-top: -8px; }
+  </style>
+</head>
+<body>
+  <header>
+    <img src="/static/logo.png" alt="CookiX" onerror="this.style.display='none'" />
+    <h1>CookiX</h1>
+    <span class="tag">reasoning-path explorer</span>
+    <span class="stats" id="stats"></span>
+  </header>
+
+  <aside>
+    <div>
+      <label for="q">Natural-language query</label>
+      <textarea id="q" rows="2" placeholder="What prevents rain?"></textarea>
+    </div>
+    <div class="row">
+      <div>
+        <label for="mode">Mode (ablation)</label>
+        <select id="mode"></select>
+      </div>
+      <div>
+        <label for="k">Top k</label>
+        <input id="k" type="number" value="5" min="1" max="50" />
+      </div>
+    </div>
+    <button id="run">Run query</button>
+    <p class="hint">Mode switches retrieval layers on/off so you can see exactly what each contributes.</p>
+
+    <h2>Results</h2>
+    <div id="results"><div class="empty">Run a query to see reasoning paths.</div></div>
+  </aside>
+
+  <div id="graph"></div>
+
+  <script>
+    const REL_COLOR = "#8a6f52";
+    let network, allNodes, allEdges, baseEdgeColor = {};
+
+    async function api(path, body) {
+      const opts = body
+        ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }
+        : {};
+      const res = await fetch(path, opts);
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    }
+
+    function nodeStyle(n) {
+      return {
+        id: n.id, label: n.label,
+        title: n.content || n.id,
+        color: {
+          background: n.dangling ? "#2e2418" : "#4a3b2c",
+          border: "#8a6f52",
+          highlight: { background: "#e0a458", border: "#ff7a45" },
+        },
+        font: { color: "#f3ead9", size: 14 },
+        borderWidth: 2, shape: "dot", size: n.dangling ? 10 : 16,
+      };
+    }
+
+    function edgeStyle(e, i) {
+      const id = "e" + i;
+      baseEdgeColor[edgeKey(e)] = id;
+      return {
+        id, from: e.source, to: e.target, label: e.relation,
+        arrows: "to", color: { color: REL_COLOR, highlight: "#ff7a45" },
+        font: { color: "#b09b82", size: 11, strokeWidth: 0, align: "middle" },
+        smooth: { type: "cubicBezier" }, width: 1.5,
+      };
+    }
+
+    function edgeKey(e) { return e.source + "|" + e.relation + "|" + e.target; }
+
+    async function loadGraph() {
+      const g = await api("/api/graph");
+      baseEdgeColor = {};
+      allNodes = new vis.DataSet(g.nodes.map(nodeStyle));
+      allEdges = new vis.DataSet(g.edges.map(edgeStyle));
+      const container = document.getElementById("graph");
+      network = new vis.Network(container, { nodes: allNodes, edges: allEdges }, {
+        physics: { barnesHut: { gravitationalConstant: -6000, springLength: 140 }, stabilization: { iterations: 200 } },
+        interaction: { hover: true, tooltipDelay: 120 },
+      });
+      return g;
+    }
+
+    function resetHighlight() {
+      allNodes.forEach(n => allNodes.update({ id: n.id, color: { ...n.color, background: n.dangling ? "#2e2418" : "#4a3b2c", border: "#8a6f52" } }));
+      allEdges.forEach(e => allEdges.update({ id: e.id, color: { color: REL_COLOR, highlight: "#ff7a45" }, width: 1.5 }));
+    }
+
+    function highlightPath(path) {
+      resetHighlight();
+      const nodeIds = new Set();
+      path.forEach(step => { nodeIds.add(step.source); nodeIds.add(step.target); });
+      nodeIds.forEach(id => {
+        const n = allNodes.get(id);
+        if (n) allNodes.update({ id, color: { ...n.color, background: "#e0a458", border: "#ff7a45" } });
+      });
+      path.forEach(step => {
+        const eid = baseEdgeColor[edgeKey({ source: step.source, relation: step.relation, target: step.target })];
+        if (eid) allEdges.update({ id: eid, color: { color: "#ff7a45", highlight: "#ff7a45" }, width: 4 });
+      });
+      if (nodeIds.size) network.fit({ nodes: [...nodeIds], animation: true });
+    }
+
+    function renderChain(path, objectId) {
+      if (!path.length) return `<span class="rel">●</span> ${objectId} <span style="color:var(--muted)">(direct match)</span>`;
+      let html = path[0].source;
+      path.forEach(s => { html += ` <span class="rel">─[${s.relation}]→</span> ${s.target}`; });
+      return html;
+    }
+
+    function renderResults(results) {
+      const box = document.getElementById("results");
+      if (!results.length) { box.innerHTML = '<div class="empty">No reasoning paths found.</div>'; return; }
+      box.innerHTML = "";
+      results.forEach(r => {
+        const div = document.createElement("div");
+        div.className = "result";
+        const comp = Object.entries(r.components).map(([k, v]) => `${k}=${v.toFixed(3)}`).join("  ");
+        div.innerHTML = `
+          <div class="chain">${renderChain(r.path, r.object_id)}</div>
+          ${r.content ? `<div class="content">${r.content}</div>` : ""}
+          <div class="meta">score=${r.score.toFixed(4)} · hops=${r.hops}${comp ? " · " + comp : ""}</div>`;
+        div.onclick = () => highlightPath(r.path);
+        box.appendChild(div);
+      });
+      if (results[0].path.length || results[0].object_id) highlightPath(results[0].path);
+    }
+
+    async function runQuery() {
+      const q = document.getElementById("q").value.trim();
+      if (!q) return;
+      const mode = document.getElementById("mode").value;
+      const k = parseInt(document.getElementById("k").value) || 5;
+      const btn = document.getElementById("run");
+      btn.textContent = "Running…"; btn.disabled = true;
+      try {
+        const { results } = await api("/api/query", { query: q, mode, k });
+        renderResults(results);
+      } catch (e) {
+        document.getElementById("results").innerHTML = `<div class="empty">Error: ${e.message}</div>`;
+      } finally {
+        btn.textContent = "Run query"; btn.disabled = false;
+      }
+    }
+
+    async function init() {
+      const info = await api("/api/info");
+      document.getElementById("stats").textContent = `${info.objects} objects · v${info.version}`;
+      const sel = document.getElementById("mode");
+      const labels = { full: "reasoning (full)", graph_only: "graph only", graph_topo: "graph + topo", graph_sheaf: "graph + sheaf" };
+      info.modes.forEach(m => {
+        const o = document.createElement("option");
+        o.value = m; o.textContent = labels[m] || m;
+        sel.appendChild(o);
+      });
+      await loadGraph();
+      document.getElementById("run").onclick = runQuery;
+      document.getElementById("q").addEventListener("keydown", e => {
+        if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) runQuery();
+      });
+    }
+
+    init();
+  </script>
+</body>
+</html>

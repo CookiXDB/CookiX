@@ -40,9 +40,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Install with topology + sheaf extras
+      - name: Install with topology + sheaf + server extras
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev,topology,sheaf]"
-      - name: Test (all layers, including topology)
+          pip install -e ".[dev,topology,sheaf,server]"
+      - name: Test (all layers, including topology and server)
         run: pytest -q

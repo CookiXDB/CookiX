@@ -47,8 +47,13 @@ sheaf = ["scipy>=1.10"]
 kuzu = ["kuzu>=0.4"]
 # LLM-based relation extraction for ingestion.
 llm = ["anthropic>=0.40"]
+# HTTP server + browser reasoning-path explorer UI (`cookix serve`).
+server = ["fastapi>=0.110", "uvicorn>=0.27", "pydantic>=2.0"]
 # Everything end users might want.
-all = ["ripser>=0.6", "persim>=0.3", "scipy>=1.10", "kuzu>=0.4", "anthropic>=0.40"]
+all = [
+    "ripser>=0.6", "persim>=0.3", "scipy>=1.10", "kuzu>=0.4", "anthropic>=0.40",
+    "fastapi>=0.110", "uvicorn>=0.27", "pydantic>=2.0",
+]
 # Development + CI.
 dev = [
     "pytest>=8.0",
@@ -67,6 +72,8 @@ cookix = "cookix.cli:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/cookix"]
+# Ship the UI assets (index.html, logo) inside the package.
+artifacts = ["src/cookix/server/static/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -79,6 +86,10 @@ target-version = "py310"
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
 ignore = ["E501"]
+
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI idiomatically calls Body/Depends/Query in argument defaults.
+extend-immutable-calls = ["fastapi.Body", "fastapi.Depends", "fastapi.Query"]
 
 [tool.mypy]
 python_version = "3.10"

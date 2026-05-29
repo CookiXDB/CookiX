@@ -72,8 +72,15 @@ class QueryEngine:
     # Stage 1: deterministic typed-edge lookup
     # ------------------------------------------------------------------ #
     def direct(self, anchor: str, relation: str | None = None) -> list[QueryResult]:
-        """Exact one-hop typed-edge match from ``anchor`` (precision 1.0)."""
+        """Exact one-hop typed-edge match from ``anchor`` (precision 1.0).
+
+        Inverse relations are *virtual*: querying ``prevented_by`` from an object
+        resolves against incoming ``prevents`` edges without those reverse edges
+        being physically stored. This lets "what prevents rain?" (rain is the
+        grammatical object) find the subject by walking the edge backwards.
+        """
         results: list[QueryResult] = []
+        seen: set[str] = set()
         for edge in self.storage.out_edges(anchor):
             if relation is not None and edge.relation != relation:
                 continue
@@ -89,6 +96,29 @@ class QueryEngine:
                     components={"geodesic": edge.weight},
                 )
             )
+            seen.add(edge.target)
+
+        # Inverse direction: an incoming edge whose relation is the inverse of
+        # the requested one satisfies the query (e.g. asking ``prevented_by``
+        # matches a stored ``prevents`` edge pointing at ``anchor``).
+        inverse = rel.inverse_of(relation) if relation is not None else None
+        if inverse is not None:
+            for source, edge in self.storage.in_edges(anchor):
+                if edge.relation != inverse or source in seen:
+                    continue
+                src_obj = self.storage.get(source)
+                step = ReasoningStep(source, edge.relation, anchor, edge.weight)
+                results.append(
+                    QueryResult(
+                        object_id=source,
+                        content=src_obj.content if src_obj else "",
+                        score=0.0,
+                        path=[step],
+                        components={"geodesic": edge.weight},
+                    )
+                )
+                seen.add(source)
+
         results.sort(key=lambda r: r.components.get("geodesic", 0.0))
         return results
 

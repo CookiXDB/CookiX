@@ -3,6 +3,7 @@
     cookix info                 # environment + available layers
     cookix demo umbrella        # run a built-in demo scenario
     cookix demo pipe
+    cookix serve                # launch the HTTP server + reasoning-path UI
 """
 
 from __future__ import annotations
@@ -35,6 +36,18 @@ def _cmd_demo(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_serve(args: argparse.Namespace) -> int:
+    from .server import serve
+
+    where = f"http://{args.host}:{args.port}"
+    print(f"CookiX server + reasoning-path explorer: {where}")
+    if args.demo:
+        print(f"  loaded '{args.demo}' demo (use --demo to change, or build your own db)")
+    print("  press Ctrl+C to stop")
+    serve(demo=args.demo, host=args.host, port=args.port)
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="cookix", description=__doc__)
     parser.add_argument("--version", action="version", version=f"cookix {__version__}")
@@ -47,6 +60,13 @@ def main(argv: list[str] | None = None) -> int:
     demo = sub.add_parser("demo", help="run a built-in demo scenario")
     demo.add_argument("scenario", choices=["umbrella", "pipe"])
     demo.set_defaults(func=_cmd_demo)
+
+    srv = sub.add_parser("serve", help="launch the HTTP server + reasoning-path UI")
+    srv.add_argument("--demo", choices=["umbrella", "pipe"], default="umbrella",
+                     help="demo database to load on start (default: umbrella)")
+    srv.add_argument("--host", default="127.0.0.1")
+    srv.add_argument("--port", type=int, default=8000)
+    srv.set_defaults(func=_cmd_serve)
 
     args = parser.parse_args(argv)
     return args.func(args)

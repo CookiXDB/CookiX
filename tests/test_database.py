@@ -39,6 +39,18 @@ def test_natural_language_intent_parsing():
     assert "pipe_130mm" in ids
 
 
+def test_inverse_relation_query():
+    # "what prevents rain?" puts rain as the grammatical object: the answer
+    # (umbrella) is reached by walking the stored 'prevents' edge backwards.
+    db = umbrella_db()
+    results = db.query("what prevents rain?")
+    assert [r.object_id for r in results] == ["umbrella"]
+    assert results[0].path[0].relation == "prevents"
+    # The subject-position phrasing still resolves the forward direction.
+    forward = db.query("what does umbrella prevent?")
+    assert [r.object_id for r in forward] == ["rain"]
+
+
 def test_delete():
     db = umbrella_db()
     assert db.delete("storm") is True

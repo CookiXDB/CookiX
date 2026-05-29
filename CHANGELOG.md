@@ -4,6 +4,20 @@ All notable changes to CookiX are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and the project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+- **HTTP server** (`cookix serve`, `cookix[server]` extra) — FastAPI app
+  exposing `/api/info`, `/api/graph`, `/api/insert`, `/api/query`.
+- **Reasoning-path explorer UI** — a browser graph view that highlights the
+  typed path justifying each answer, with live ablation-mode switching.
+
+### Changed
+- **Inverse relations are now virtual in single-hop lookup.** Querying a
+  relation's inverse (e.g. `prevented_by`) resolves against incoming forward
+  edges, so natural-language object-position queries like *"what prevents
+  rain?"* return the subject without reverse edges being stored.
+
 ## [0.1.0] - 2026-05-29
 
 First public release: a working Python-first reference implementation of the
