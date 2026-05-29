@@ -267,13 +267,15 @@
           return;
         }
         renderSteps(trace);
-        animateTrace(trace);
+        // Show the textual path + residual first (these never need WebGL), then
+        // attempt the 3D animation as a best-effort enhancement.
         const box = document.getElementById("residualBox");
         box.style.display = "block";
         document.getElementById("residualVal").textContent = trace.residual.toFixed(4);
         document.getElementById("residualNote").textContent =
           trace.residual < 0.5 ? "low — coherent composition"
           : trace.residual < 1.0 ? "moderate" : "high — meaning did not compose to the target";
+        try { animateTrace(trace); } catch (_) { /* 3D unavailable; trace text still shown */ }
       } catch (e) {
         document.getElementById("steps").innerHTML = `<div class="step">Error: ${e.message}</div>`;
       } finally {
@@ -316,6 +318,10 @@
           '<div style="padding:24px;color:#b09b82;font-size:13px">3D view unavailable ('
           + e.message + '). The path trace and residual on the left still work.</div>';
       }
+
+      // Auto-demo: trace the default anchor→target immediately so a first-time
+      // visitor sees a result without having to know what to click.
+      if (anchorSel.value && targetSel.value) runTrace();
     }
 
     init();

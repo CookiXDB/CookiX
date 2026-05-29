@@ -6,6 +6,17 @@ All notable changes to CookiX are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.1.5] - 2026-05-29
+
+### Changed
+- **Explorer UIs now teach themselves.** The reasoning-path explorer auto-runs a
+  demo query on load (highlighting a real multi-hop path) and offers **clickable
+  example chips generated from whatever database is loaded** — so a first-time
+  visitor sees CookiX working without knowing what to type. Results are redesigned
+  with relation badges, the answer highlighted, and a graph legend. The 3D sheaf
+  explorer auto-traces its default anchor→target on load. Both degrade gracefully
+  when the 3D view is unavailable.
+
 ## [1.1.4] - 2026-05-29
 
 ### Fixed

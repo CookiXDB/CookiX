@@ -7,59 +7,88 @@
   <script src="/static/vendor/vis-network.min.js"></script>
   <style>
     :root {
-      --bg: #1a1410; --panel: #241b14; --edge: #6b5644; --line: #3a2d22;
+      --bg: #1a1410; --panel: #241b14; --panel2: #2c2017; --line: #3a2d22;
       --text: #f3ead9; --muted: #b09b82; --accent: #e0a458; --path: #ff7a45;
-      --node: #4a3b2c; --node-border: #8a6f52;
     }
     * { box-sizing: border-box; }
     body {
       margin: 0; font-family: "Segoe UI", system-ui, sans-serif;
       background: var(--bg); color: var(--text); height: 100vh;
-      display: grid; grid-template-columns: 360px 1fr; grid-template-rows: 56px 1fr;
+      display: grid; grid-template-columns: 380px 1fr; grid-template-rows: 56px 1fr;
       grid-template-areas: "header header" "sidebar graph";
     }
     header {
       grid-area: header; display: flex; align-items: center; gap: 12px;
       padding: 0 18px; background: var(--panel); border-bottom: 1px solid var(--line);
     }
-    header img { width: 32px; height: 32px; border-radius: 6px; }
+    header img { width: 30px; height: 30px; border-radius: 6px; }
     header h1 { font-size: 18px; margin: 0; font-weight: 600; }
     header .tag { color: var(--muted); font-size: 12px; }
+    header a.nav { margin-left: 18px; color: var(--accent); text-decoration: none; font-size: 13px; }
+    header a.nav:hover { text-decoration: underline; }
     header .stats { margin-left: auto; color: var(--muted); font-size: 13px; }
     aside {
       grid-area: sidebar; background: var(--panel); border-right: 1px solid var(--line);
-      padding: 18px; overflow-y: auto; display: flex; flex-direction: column; gap: 14px;
+      padding: 16px 18px; overflow-y: auto; display: flex; flex-direction: column; gap: 14px;
     }
-    label { font-size: 12px; color: var(--muted); display: block; margin-bottom: 4px; }
+    .lead { font-size: 13px; line-height: 1.5; color: var(--muted); margin: 0; }
+    .lead b { color: var(--text); }
+    label { font-size: 12px; color: var(--muted); display: block; margin-bottom: 5px; }
     input, select, textarea {
       width: 100%; background: var(--bg); border: 1px solid var(--line);
       color: var(--text); border-radius: 7px; padding: 9px 11px; font-size: 14px;
       font-family: inherit;
     }
-    input:focus, select:focus, textarea:focus { outline: 1px solid var(--accent); }
+    input:focus, select:focus, textarea:focus { outline: 1px solid var(--accent); border-color: var(--accent); }
     button {
       background: var(--accent); color: #1a1410; border: none; border-radius: 7px;
       padding: 10px 14px; font-size: 14px; font-weight: 600; cursor: pointer; width: 100%;
     }
     button:hover { filter: brightness(1.08); }
+    button:disabled { opacity: .6; cursor: default; }
     .row { display: flex; gap: 8px; }
     .row > * { flex: 1; }
-    h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em;
-      color: var(--muted); margin: 6px 0 0; }
+    h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .07em;
+      color: var(--muted); margin: 4px 0 0; }
+    .chips { display: flex; flex-wrap: wrap; gap: 7px; }
+    .chip {
+      background: var(--panel2); border: 1px solid var(--line); color: var(--text);
+      border-radius: 999px; padding: 6px 12px; font-size: 12.5px; cursor: pointer;
+      width: auto; font-weight: 500; transition: all .12s;
+    }
+    .chip:hover { border-color: var(--accent); color: var(--accent); }
+    .chip .k { color: var(--accent); }
     #results { display: flex; flex-direction: column; gap: 10px; }
     .result {
       background: var(--bg); border: 1px solid var(--line); border-radius: 8px;
       padding: 11px 12px; cursor: pointer; transition: border-color .12s;
     }
     .result:hover { border-color: var(--accent); }
-    .result .chain { font-size: 13px; line-height: 1.5; }
-    .result .rel { color: var(--accent); }
-    .result .meta { color: var(--muted); font-size: 11px; margin-top: 6px;
+    .result.top { border-color: var(--path); }
+    .result .chain { font-size: 13px; line-height: 1.6; }
+    .result .node { color: var(--text); font-weight: 600; }
+    .result .rel {
+      color: var(--accent); font-family: ui-monospace, monospace; font-size: 11.5px;
+      background: rgba(224,164,88,.12); padding: 1px 6px; border-radius: 5px; margin: 0 2px;
+    }
+    .result .ans { color: var(--path); font-weight: 700; }
+    .result .meta { color: var(--muted); font-size: 11px; margin-top: 7px;
       font-family: ui-monospace, monospace; }
     .result .content { color: var(--muted); font-size: 12px; margin-top: 4px; font-style: italic; }
-    #graph { grid-area: graph; height: 100%; }
-    .empty { color: var(--muted); font-size: 13px; font-style: italic; }
-    .hint { font-size: 11px; color: var(--muted); margin-top: -8px; }
+    .empty { color: var(--muted); font-size: 13px; line-height: 1.5; }
+    .hint { font-size: 11px; color: var(--muted); margin: -6px 0 0; line-height: 1.4; }
+    #graphWrap { grid-area: graph; position: relative; }
+    #graph { height: 100%; }
+    .legend {
+      position: absolute; bottom: 14px; left: 14px; background: rgba(36,27,20,.9);
+      border: 1px solid var(--line); border-radius: 8px; padding: 9px 12px;
+      font-size: 11.5px; color: var(--muted); display: flex; gap: 14px; align-items: center;
+    }
+    .legend .sw { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 5px; vertical-align: middle; }
+    .overlay {
+      position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+      color: var(--muted); font-size: 14px; pointer-events: none;
+    }
   </style>
 </head>
 <body>
@@ -67,14 +96,18 @@
     <img src="/static/logo.png" alt="CookiX" onerror="this.style.display='none'" />
     <h1>CookiX</h1>
     <span class="tag">reasoning-path explorer</span>
-    <a href="/sheaf" style="margin-left:18px;color:var(--accent);text-decoration:none;font-size:13px;">3D sheaf explorer →</a>
+    <a class="nav" href="/sheaf">3D sheaf explorer →</a>
     <span class="stats" id="stats"></span>
   </header>
 
   <aside>
+    <p class="lead">Ask a <b>relational</b> question. Unlike a vector search, CookiX
+      answers with the <b>path that proves it</b> — the typed, directed chain of
+      edges, highlighted on the graph.</p>
+
     <div>
       <label for="q">Natural-language query</label>
-      <textarea id="q" rows="2" placeholder="What prevents rain?"></textarea>
+      <textarea id="q" rows="2" placeholder="e.g. how is umbrella connected to wet_coat?"></textarea>
     </div>
     <div class="row">
       <div>
@@ -87,13 +120,25 @@
       </div>
     </div>
     <button id="run">Run query</button>
-    <p class="hint">Mode switches retrieval layers on/off so you can see exactly what each contributes.</p>
+    <p class="hint">Tip: ⌘/Ctrl+Enter runs the query. Mode toggles retrieval layers
+      so you can see what each contributes.</p>
+
+    <h2>Try these</h2>
+    <div class="chips" id="examples"><span class="empty">Loading examples…</span></div>
 
     <h2>Results</h2>
-    <div id="results"><div class="empty">Run a query to see reasoning paths.</div></div>
+    <div id="results"><div class="empty">Pick an example above, or ask your own question.</div></div>
   </aside>
 
-  <div id="graph"></div>
+  <div id="graphWrap">
+    <div id="graph"></div>
+    <div class="legend">
+      <span><span class="sw" style="background:#4a3b2c;border:1px solid #8a6f52"></span>object</span>
+      <span><span class="sw" style="background:#ff7a45"></span>answer path</span>
+      <span>drag to pan · scroll to zoom</span>
+    </div>
+    <div class="overlay" id="overlay">building graph…</div>
+  </div>
 
   <script>
     const REL_COLOR = "#8a6f52";
@@ -110,40 +155,35 @@
 
     function nodeStyle(n) {
       return {
-        id: n.id, label: n.label,
-        title: n.content || n.id,
-        color: {
-          background: n.dangling ? "#2e2418" : "#4a3b2c",
-          border: "#8a6f52",
-          highlight: { background: "#e0a458", border: "#ff7a45" },
-        },
+        id: n.id, label: n.label, title: n.content || n.id,
+        color: { background: n.dangling ? "#2e2418" : "#4a3b2c", border: "#8a6f52",
+          highlight: { background: "#e0a458", border: "#ff7a45" } },
         font: { color: "#f3ead9", size: 14 },
         borderWidth: 2, shape: "dot", size: n.dangling ? 10 : 16,
       };
     }
-
+    function edgeKey(e) { return e.source + "|" + e.relation + "|" + e.target; }
     function edgeStyle(e, i) {
       const id = "e" + i;
       baseEdgeColor[edgeKey(e)] = id;
-      return {
-        id, from: e.source, to: e.target, label: e.relation,
-        arrows: "to", color: { color: REL_COLOR, highlight: "#ff7a45" },
+      return { id, from: e.source, to: e.target, label: e.relation, arrows: "to",
+        color: { color: REL_COLOR, highlight: "#ff7a45" },
         font: { color: "#b09b82", size: 11, strokeWidth: 0, align: "middle" },
-        smooth: { type: "cubicBezier" }, width: 1.5,
-      };
+        smooth: { type: "cubicBezier" }, width: 1.5 };
     }
-
-    function edgeKey(e) { return e.source + "|" + e.relation + "|" + e.target; }
 
     async function loadGraph() {
       const g = await api("/api/graph");
       baseEdgeColor = {};
       allNodes = new vis.DataSet(g.nodes.map(nodeStyle));
       allEdges = new vis.DataSet(g.edges.map(edgeStyle));
-      const container = document.getElementById("graph");
-      network = new vis.Network(container, { nodes: allNodes, edges: allEdges }, {
-        physics: { barnesHut: { gravitationalConstant: -6000, springLength: 140 }, stabilization: { iterations: 200 } },
-        interaction: { hover: true, tooltipDelay: 120 },
+      network = new vis.Network(document.getElementById("graph"),
+        { nodes: allNodes, edges: allEdges }, {
+          physics: { barnesHut: { gravitationalConstant: -6000, springLength: 140 }, stabilization: { iterations: 220 } },
+          interaction: { hover: true, tooltipDelay: 120 },
+        });
+      network.once("stabilizationIterationsDone", () => {
+        document.getElementById("overlay").style.display = "none";
       });
       return g;
     }
@@ -152,56 +192,56 @@
       allNodes.forEach(n => allNodes.update({ id: n.id, color: { ...n.color, background: n.dangling ? "#2e2418" : "#4a3b2c", border: "#8a6f52" } }));
       allEdges.forEach(e => allEdges.update({ id: e.id, color: { color: REL_COLOR, highlight: "#ff7a45" }, width: 1.5 }));
     }
-
     function highlightPath(path) {
       resetHighlight();
       const nodeIds = new Set();
-      path.forEach(step => { nodeIds.add(step.source); nodeIds.add(step.target); });
+      path.forEach(s => { nodeIds.add(s.source); nodeIds.add(s.target); });
       nodeIds.forEach(id => {
         const n = allNodes.get(id);
         if (n) allNodes.update({ id, color: { ...n.color, background: "#e0a458", border: "#ff7a45" } });
       });
-      path.forEach(step => {
-        const eid = baseEdgeColor[edgeKey({ source: step.source, relation: step.relation, target: step.target })];
+      path.forEach(s => {
+        const eid = baseEdgeColor[edgeKey(s)];
         if (eid) allEdges.update({ id: eid, color: { color: "#ff7a45", highlight: "#ff7a45" }, width: 4 });
       });
       if (nodeIds.size) network.fit({ nodes: [...nodeIds], animation: true });
     }
 
     function renderChain(path, objectId) {
-      if (!path.length) return `<span class="rel">●</span> ${objectId} <span style="color:var(--muted)">(direct match)</span>`;
-      let html = path[0].source;
-      path.forEach(s => { html += ` <span class="rel">─[${s.relation}]→</span> ${s.target}`; });
+      if (!path.length) return `<span class="ans">${objectId}</span> <span style="color:var(--muted)">(direct match)</span>`;
+      let html = `<span class="node">${path[0].source}</span>`;
+      path.forEach((s, i) => {
+        const tgt = i === path.length - 1 ? `<span class="ans">${s.target}</span>` : `<span class="node">${s.target}</span>`;
+        html += ` <span class="rel">${s.relation}</span> ${tgt}`;
+      });
       return html;
     }
-
     function renderResults(results) {
       const box = document.getElementById("results");
-      if (!results.length) { box.innerHTML = '<div class="empty">No reasoning paths found.</div>'; return; }
+      if (!results.length) {
+        box.innerHTML = '<div class="empty">No reasoning path found. CookiX answers <i>relational</i> questions — try “what prevents rain?” or pick an example above.</div>';
+        return;
+      }
       box.innerHTML = "";
-      results.forEach(r => {
+      results.forEach((r, i) => {
         const div = document.createElement("div");
-        div.className = "result";
+        div.className = "result" + (i === 0 ? " top" : "");
         const comp = Object.entries(r.components).map(([k, v]) => `${k}=${v.toFixed(3)}`).join("  ");
         div.innerHTML = `
           <div class="chain">${renderChain(r.path, r.object_id)}</div>
           ${r.content ? `<div class="content">${r.content}</div>` : ""}
-          <div class="meta">score=${r.score.toFixed(4)} · hops=${r.hops}${comp ? " · " + comp : ""}</div>`;
+          <div class="meta">score ${r.score.toFixed(4)} · ${r.hops} hop${r.hops === 1 ? "" : "s"}${comp ? " · " + comp : ""}</div>`;
         div.onclick = () => highlightPath(r.path);
         box.appendChild(div);
       });
-      if (results[0].path.length || results[0].object_id) highlightPath(results[0].path);
+      highlightPath(results[0].path);
     }
 
-    async function runQuery() {
-      const q = document.getElementById("q").value.trim();
-      if (!q) return;
-      const mode = document.getElementById("mode").value;
-      const k = parseInt(document.getElementById("k").value) || 5;
+    async function run(payload) {
       const btn = document.getElementById("run");
       btn.textContent = "Running…"; btn.disabled = true;
       try {
-        const { results } = await api("/api/query", { query: q, mode, k });
+        const { results } = await api("/api/query", payload);
         renderResults(results);
       } catch (e) {
         document.getElementById("results").innerHTML = `<div class="empty">Error: ${e.message}</div>`;
@@ -209,22 +249,85 @@
         btn.textContent = "Run query"; btn.disabled = false;
       }
     }
+    function runNL() {
+      const q = document.getElementById("q").value.trim();
+      if (!q) return;
+      run({ query: q, mode: document.getElementById("mode").value, k: kVal() });
+    }
+    function kVal() { return parseInt(document.getElementById("k").value) || 5; }
+
+    // Build clickable examples from whatever graph is loaded (works for any DB).
+    function buildExamples(g) {
+      const ex = [];
+      const out = {};
+      g.edges.forEach(e => { (out[e.source] = out[e.source] || []).push(e); });
+
+      const usedSrc = new Set();
+      for (const e of g.edges) {                       // single-hop, one per source
+        if (usedSrc.has(e.source)) continue;
+        usedSrc.add(e.source);
+        ex.push({
+          label: `${e.source} <span class="k">${e.relation}</span> ?`,
+          nl: `what does ${e.source} ${e.relation}?`,
+          payload: { anchor: e.source, relation: e.relation },
+        });
+        if (ex.length >= 3) break;
+      }
+      for (const e1 of g.edges) {                       // one multi-hop path a→b→c
+        const next = out[e1.target];
+        if (next && next.length && next[0].target !== e1.source) {
+          ex.push({
+            label: `${e1.source} ⇝ ${next[0].target} <span class="k">(multi-hop)</span>`,
+            nl: `how is ${e1.source} connected to ${next[0].target}?`,
+            payload: { anchor: e1.source, target: next[0].target },
+          });
+          break;
+        }
+      }
+      return ex;
+    }
+
+    function renderExamples(ex) {
+      const box = document.getElementById("examples");
+      if (!ex.length) { box.innerHTML = '<span class="empty">No edges to demo.</span>'; return; }
+      box.innerHTML = "";
+      ex.forEach(e => {
+        const b = document.createElement("button");
+        b.className = "chip"; b.innerHTML = e.label;
+        b.onclick = () => {
+          document.getElementById("q").value = e.nl;           // show the NL form too
+          run({ ...e.payload, mode: document.getElementById("mode").value, k: kVal() });
+        };
+        box.appendChild(b);
+      });
+      return ex;
+    }
 
     async function init() {
       const info = await api("/api/info");
       document.getElementById("stats").textContent = `${info.objects} objects · v${info.version}`;
       const sel = document.getElementById("mode");
       const labels = { full: "reasoning (full)", graph_only: "graph only", graph_topo: "graph + topo", graph_sheaf: "graph + sheaf" };
-      info.modes.forEach(m => {
+      const order = ["full", "graph_only", "graph_topo", "graph_sheaf"];
+      info.modes.sort((a, b) => order.indexOf(a) - order.indexOf(b)).forEach(m => {
         const o = document.createElement("option");
-        o.value = m; o.textContent = labels[m] || m;
-        sel.appendChild(o);
+        o.value = m; o.textContent = labels[m] || m; sel.appendChild(o);
       });
-      await loadGraph();
-      document.getElementById("run").onclick = runQuery;
+
+      const g = await loadGraph();
+      document.getElementById("run").onclick = runNL;
       document.getElementById("q").addEventListener("keydown", e => {
-        if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) runQuery();
+        if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) runNL();
       });
+
+      const ex = renderExamples(buildExamples(g));
+      // Auto-demo: run the most interesting example (the multi-hop one if present)
+      // so a first-time visitor immediately sees a highlighted reasoning path.
+      if (ex && ex.length) {
+        const demo = ex[ex.length - 1];
+        document.getElementById("q").value = demo.nl;
+        run({ ...demo.payload, mode: sel.value, k: kVal() });
+      }
     }
 
     init();
