@@ -137,7 +137,7 @@
       scene.background = new THREE.Color(0x1a1410);
       camera = new THREE.PerspectiveCamera(55, el.clientWidth / el.clientHeight, 0.01, 100);
       camera.position.set(2.4, 1.6, 2.4);
-      renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
       renderer.setSize(el.clientWidth, el.clientHeight);
       renderer.setPixelRatio(window.devicePixelRatio);
       el.appendChild(renderer.domElement);

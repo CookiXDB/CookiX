@@ -36,3 +36,6 @@ Thumbs.db
 
 # Notebooks
 .ipynb_checkpoints/
+
+# Local editor/preview tooling
+.claude/

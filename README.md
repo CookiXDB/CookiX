@@ -90,6 +90,10 @@ cookix info          # shows which optional layers are active
 
 A vector database can only show you a blob and a distance. CookiX can show you **why** — the typed path that justifies each answer, as an interactive graph.
 
+<p align="center">
+  <img src="assets/demo-reasoning.png" alt="CookiX reasoning-path explorer — the query 'what prevents rain?' lights up the umbrella —[prevents]→ rain path" width="800" />
+</p>
+
 ```bash
 pip install "cookix[server]"
 cookix serve                 # opens an HTTP API + UI at http://127.0.0.1:8000
@@ -102,7 +106,13 @@ Open the browser UI, type a natural-language query (e.g. *"what prevents rain?"*
 
 The UI also includes a **3D sheaf explorer** (linked from the top bar, or `/sheaf`). At `dim=3`, every object's sheaf stalk is a unit vector on the sphere and every relation is a rotation of it. Pick an anchor and a target, and watch the anchor's "meaning" get *carried* through each relation on the reasoning path — the gap between where it lands and the target's stalk **is** the composition residual. A coherent chain lands near the target; an incoherent one drifts away.
 
-> Honest note: the restriction maps are currently random placeholders, so residuals are large by design. The explorer is built to make that visible — when learned maps arrive, you'll *see* meaning start to compose.
+<p align="center">
+  <img src="assets/demo-sheaf.gif" alt="3D sheaf explorer — the anchor stalk is carried along prevents→causes; the dashed line is the composition residual to the target stalk" width="420" />
+  &nbsp;&nbsp;
+  <img src="assets/demo-sheaf.png" alt="Static view of the carry: green anchor stalk, orange carried meaning, blue target stalk, dashed residual gap" width="420" />
+</p>
+
+> Honest note: the restriction maps are currently random placeholders, so residuals are large by design (the trace above lands far from the target). The explorer is built to make that visible — when learned maps arrive, you'll *see* meaning start to compose.
 
 The server also exposes the database over HTTP for non-Python clients:
 
