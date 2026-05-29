@@ -7,6 +7,11 @@ All notable changes to CookiX are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- **Non-oracle entity linking (Phase 18)** — `cookix eval --dataset 2wiki
+  --no-oracle` chooses the anchor with a lexical BM25 entity linker instead of
+  the gold one. Honest end-to-end result on 2WikiMultiHopQA: linker recovers the
+  gold head 50.1% of the time and CookiX drops from hits@10 0.58 (oracle) to 0.34
+  (linked, below BM25's 0.39) — entity linking is the open-domain bottleneck.
 - **API-key roles + secure-by-default binding (Phase 16)** — keys map to
   `read`/`write`/`admin` (`COOKIX_API_KEYS="k:role,…"`); reads need `read`,
   mutations need `write` (`403` otherwise). `serve` now refuses to bind a

@@ -276,11 +276,26 @@ def _evaluable(ex: RelExample, nodes: set[str]) -> bool:
     )
 
 
+def link_anchor(question: str, bm25: BM25Retriever, nodes: set[str]) -> str | None:
+    """Pick the question's most likely head entity by lexical match (no oracle).
+
+    A deliberately simple entity linker: rank graph entities by BM25 over the
+    question and take the best one. It is imperfect on purpose — the gap between
+    this and the gold anchor is exactly the entity-linking cost that the oracle
+    setting hides.
+    """
+    ranked = bm25.retrieve_ids(question, k=1)
+    if ranked and ranked[0].object_id in nodes:
+        return ranked[0].object_id
+    return None
+
+
 def run_dataset_eval(
     dataset: RelationalDataset,
     k: int = 10,
     modes: tuple[str, ...] = ("graph", "reasoning"),
     max_hops: int = 4,
+    oracle_anchor: bool = True,
 ) -> DatasetReport:
     """Score CookiX traversal vs BM25 on multi-hop answer-entity retrieval.
 
@@ -302,16 +317,26 @@ def run_dataset_eval(
     rows: dict[str, _Acc] = {"bm25": _Acc()}
     for m in modes:
         rows[f"cookix-{m}"] = _Acc()
+    link_hits = 0  # how often the linker recovers the gold anchor (non-oracle)
 
     for ex in evaluable:
         gold = _answer_key(ex)
-        anchor = normalise_entity(ex.anchor) if ex.anchor else None
+        gold_anchor = normalise_entity(ex.anchor) if ex.anchor else None
+        if oracle_anchor:
+            anchor = gold_anchor
+        else:
+            anchor = link_anchor(ex.question, bm25, nodes)
+            if anchor == gold_anchor:
+                link_hits += 1
 
         bm = bm25.retrieve_ids(ex.question, k)
         rows["bm25"].add(ex, _hit(bm, gold, k), _mrr(bm, gold), path_match=None)
 
         for m in modes:
-            results = db.query(anchor=anchor, k=k, mode=m, max_hops=max_hops)
+            results = (
+                db.query(anchor=anchor, k=k, mode=m, max_hops=max_hops)
+                if anchor is not None else []
+            )
             ranked = [Retrieved(r.object_id, -r.score) for r in results]
             pm = _path_match(results, gold, ex.gold_relations)
             rows[f"cookix-{m}"].add(ex, _hit(ranked, gold, k), _mrr(ranked, gold), pm)
@@ -321,13 +346,21 @@ def run_dataset_eval(
                      overall=acc.means(), by_type=acc.by_type())
         for name, acc in rows.items()
     ]
-    note = (
-        "Oracle entity-linking setting: CookiX is given the question's head "
-        "entity as anchor and traverses the gold-evidence knowledge graph; BM25 "
-        "ranks the same paragraphs by the raw question. This measures the "
-        "relational reasoning engine, not free-text extraction (see "
-        "`cookix eval --extraction` for that, separately)."
-    )
+    if oracle_anchor:
+        note = (
+            "Oracle entity-linking setting: CookiX is given the question's head "
+            "entity as anchor and traverses the gold-evidence knowledge graph; BM25 "
+            "ranks the same paragraphs by the raw question. This measures the "
+            "relational reasoning engine, not free-text extraction/linking."
+        )
+    else:
+        acc = (link_hits / len(evaluable)) if evaluable else 0.0
+        note = (
+            f"End-to-end (non-oracle) setting: the anchor is chosen by a lexical "
+            f"entity linker (BM25), which recovered the gold head entity "
+            f"{acc * 100:.1f}% of the time. CookiX's drop vs the oracle run is the "
+            f"entity-linking cost — the honest open-domain frontier."
+        )
     return DatasetReport(
         dataset=dataset.name,
         n_examples=len(dataset),

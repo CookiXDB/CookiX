@@ -353,14 +353,21 @@ it is buildable; that last one is lived.
 - **Exit gate:** survives a node loss with no data loss; horizontal **read**
   scaling demonstrated under load.
 
-## Phase 18 — Close the open-domain quality gap *(end-to-end, non-oracle)*
+## Phase 18 — Close the open-domain quality gap *(end-to-end, non-oracle)* — ◐ MEASURED
 
-- Quantify the **LLM extractor** vs rule-based on real data; add an **entity-
-  linking** stage so the anchor is no longer an oracle.
-- Add a **dense-retriever** baseline; extend the external suite to **HotpotQA**
-  and **MuSiQue** alongside 2WikiMultiHopQA.
-- **Exit gate:** published **end-to-end (non-oracle)** numbers vs dense retrievers
-  on three datasets, with an honest verdict on where CookiX wins and loses.
+- **Done:** an **entity-linking** stage (`--no-oracle`) so the anchor is chosen by
+  a lexical BM25 linker, not given. Published the honest end-to-end number on
+  2WikiMultiHopQA (2,000 dev examples): the linker recovers the gold head entity
+  **50.1%** of the time, and CookiX falls from **hits@10 0.580 (oracle) → 0.340
+  (linked)** — *below* BM25's 0.386. The finding, stated without spin: **the
+  relational engine is strong when linked correctly, but end-to-end open-domain
+  accuracy is gated by entity linking.** CookiX still returns a reasoning path
+  (`path_match` 0.33) where BM25 returns none.
+- **Remaining:** a stronger/LLM **entity linker** (the obvious lever — at perfect
+  linking CookiX returns to 0.58), a quantified **LLM extractor**, a **dense-
+  retriever** baseline, and **HotpotQA** + **MuSiQue** loaders.
+- **Exit gate:** published end-to-end (non-oracle) numbers vs a dense retriever on
+  three datasets, with an honest win/loss verdict.
 
 ## Phase 19 — Production mileage & GA *(the part only time buys)*
 

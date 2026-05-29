@@ -76,7 +76,7 @@ def _cmd_eval(args: argparse.Namespace) -> int:
                   "(e.g. 2WikiMultiHopQA dev.json). See ROADMAP.md Phase 6.")
             return 2
         ds = load_2wiki(args.path, limit=args.limit)
-        report = run_dataset_eval(ds, k=args.k)
+        report = run_dataset_eval(ds, k=args.k, oracle_anchor=not args.no_oracle)
         print(to_markdown_dataset(report))
         return 0
 
@@ -180,6 +180,8 @@ def main(argv: list[str] | None = None) -> int:
     ev.add_argument("--path", help="path to the dataset JSON (with --dataset)")
     ev.add_argument("--limit", type=int, default=None,
                     help="cap the number of dataset examples (with --dataset)")
+    ev.add_argument("--no-oracle", action="store_true",
+                    help="with --dataset: link the anchor (no oracle entity-linking)")
     ev.set_defaults(func=_cmd_eval)
 
     lt = sub.add_parser("loadtest", help="load/soak-test the HTTP server with concurrent clients")

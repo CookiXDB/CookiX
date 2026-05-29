@@ -360,13 +360,28 @@ dev examples** (1,802 evaluable; `k=10`):
   candidates but don't change which answers are reachable) — reported honestly,
   not hidden.
 
-**Honest scope, stated plainly:** this is the **oracle entity-linking** setting
-standard in KG-QA — CookiX is given the question's head entity as the anchor, so
-this measures the *reasoning engine* (the paper's Algorithm 1), not open-domain
-extraction + linking. End-to-end open-domain QA additionally depends on triple
-extraction from free text, measured separately below and currently the limiting
-factor. A real win on the engine is real; we just don't dress it up as an
-end-to-end number it isn't.
+**Honest scope, stated plainly:** the table above is the **oracle entity-linking**
+setting standard in KG-QA — CookiX is given the question's head entity as anchor,
+so it measures the *reasoning engine* (the paper's Algorithm 1).
+
+**Dropping the oracle — the honest open-domain result.** What happens when a
+real (imperfect) **entity linker** must pick the anchor? `cookix eval --dataset
+2wiki --no-oracle` uses a lexical BM25 linker; on the same 2,000 examples:
+
+| setting | CookiX hits@10 | MRR | path_match |
+|---|---|---|---|
+| oracle anchor | 0.580 | 0.282 | 0.579 |
+| **linked anchor (non-oracle)** | **0.340** | 0.168 | 0.331 |
+| BM25 (no linking needed) | 0.386 | 0.239 | n/a |
+
+The lexical linker recovers the gold head entity only **50.1%** of the time, and
+CookiX's advantage **evaporates** — at hits@10 0.340 it now *trails* BM25's 0.386,
+because half the time it starts traversing from the wrong anchor. The lesson,
+stated without spin: **the relational engine is strong when linked correctly, but
+end-to-end open-domain accuracy is gated by entity linking (and, for free text,
+extraction).** Closing that — a better/LLM linker and extractor — is the live
+frontier ([Phase 18](ROADMAP.md)), not a solved claim. CookiX still returns a
+reasoning path (`path_match` 0.33) where BM25 returns none.
 
 ### Extraction quality is the multi-hop ceiling
 
@@ -549,7 +564,7 @@ Explicitly **out of scope for v1.0**: distributed clustering/sharding, a hosted 
 - [ ] **Phase 15** — Rust/PyO3 hot-path core (the deferred 1.0 item).
 - [~] **Phase 16** — **API-key roles** (read/write/admin) + **secure-by-default binding** (refuse public bind without auth) shipped and tested. *Remaining: per-tenant data isolation, distributed rate limiting (Redis), OpenTelemetry tracing, TLS reference configs.*
 - [ ] **Phase 17** — Distributed / HA: replication, failover, PITR backups.
-- [ ] **Phase 18** — Close the open-domain gap: entity linking (drop oracle), dense baseline, HotpotQA + MuSiQue.
+- [~] **Phase 18** — **Non-oracle entity linking shipped** (`--no-oracle`): with a lexical linker (50% link accuracy) CookiX drops to hits@10 0.34 (below BM25's 0.39) — an honest measurement that **entity linking is the open-domain bottleneck**. *Remaining: a better/LLM linker, a dense-retriever baseline, HotpotQA + MuSiQue.*
 - [ ] **Phase 19** — Production mileage & GA — *earned over real uptime, not coded.*
 
 ---

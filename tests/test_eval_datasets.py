@@ -5,6 +5,7 @@ from pathlib import Path
 from cookix.eval.datasets import (
     BM25Retriever,
     build_graph,
+    link_anchor,
     load_2wiki,
     normalise_entity,
     run_dataset_eval,
@@ -61,6 +62,24 @@ def test_cookix_traversal_recovers_multihop_answer():
     # rather than its gold 2-hop chain. Strict gold-chain matching catches this —
     # exactly the distractor realism a single shared KG is meant to expose.
     assert cookix.overall["path_match"] == 0.5
+
+
+def test_entity_linker_finds_head_entity():
+    ds = load_2wiki(FIXTURE)
+    _, text = build_graph(ds)
+    nodes = set(text)
+    bm = BM25Retriever({k: text.get(k, k) for k in nodes})
+    # The director question should link to the film, not the answer entity.
+    linked = link_anchor("Who is the director of film Polish-Russian War?", bm, nodes)
+    assert linked == normalise_entity("Polish-Russian War (film)")
+
+
+def test_non_oracle_eval_runs_and_notes_linking():
+    ds = load_2wiki(FIXTURE)
+    report = run_dataset_eval(ds, k=10, modes=("graph",), oracle_anchor=False)
+    assert "non-oracle" in report.note.lower()
+    # A cookix score is still produced (possibly lower than oracle).
+    assert any(s.name == "cookix-graph" for s in report.scores)
 
 
 def test_report_renders_markdown_with_both_retrievers():
