@@ -23,6 +23,16 @@ from .baselines import (
     Retrieved,
 )
 from .corpus import Corpus, EvalQuery, synthetic_corpus
+from .datasets import (
+    BM25Retriever,
+    DatasetReport,
+    RelationalDataset,
+    RelExample,
+    build_graph,
+    load_2wiki,
+    run_dataset_eval,
+    to_markdown_dataset,
+)
 from .extraction import (
     Annotated,
     ExtractionReport,
@@ -70,4 +80,12 @@ __all__ = [
     "PerfRow",
     "run_perf_benchmark",
     "to_markdown_perf",
+    "BM25Retriever",
+    "RelExample",
+    "RelationalDataset",
+    "DatasetReport",
+    "load_2wiki",
+    "build_graph",
+    "run_dataset_eval",
+    "to_markdown_dataset",
 ]

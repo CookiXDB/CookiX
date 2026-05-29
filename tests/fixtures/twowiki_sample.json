@@ -1,0 +1,52 @@
+[
+  {
+    "_id": "ex_bridge_1",
+    "type": "compositional",
+    "question": "Who is the father of the director of film Polish-Russian War (Film)?",
+    "answer": "Andrzej Zulawski",
+    "supporting_facts": [["Polish-Russian War (film)", 0], ["Xawery Zulawski", 0]],
+    "context": [
+      ["Polish-Russian War (film)", ["Polish-Russian War is a 2009 Polish film directed by Xawery Zulawski based on a novel."]],
+      ["Xawery Zulawski", ["Xawery Zulawski is a Polish film director born in 1971 in Warsaw."]],
+      ["Andrzej Zulawski", ["Andrzej Zulawski was a Polish film director and writer."]],
+      ["Distractor Alpha", ["Distractor Alpha is an unrelated topic about geology and rocks."]],
+      ["Distractor Beta", ["Distractor Beta concerns marine biology and coral reefs."]]
+    ],
+    "evidences": [
+      ["Polish-Russian War (film)", "director", "Xawery Zulawski"],
+      ["Xawery Zulawski", "father", "Andrzej Zulawski"]
+    ]
+  },
+  {
+    "_id": "ex_bridge_2",
+    "type": "inference",
+    "question": "What is the country of the headquarters location of Boraq Airlines?",
+    "answer": "Afghanistan",
+    "supporting_facts": [["Boraq Airlines", 0], ["Kabul", 0]],
+    "context": [
+      ["Boraq Airlines", ["Boraq Airlines was an airline with its headquarters in Kabul."]],
+      ["Kabul", ["Kabul is the capital and largest city of Afghanistan."]],
+      ["Afghanistan", ["Afghanistan is a landlocked country in Central Asia."]],
+      ["Distractor Gamma", ["Distractor Gamma is about classical music composers."]]
+    ],
+    "evidences": [
+      ["Boraq Airlines", "headquarters location", "Kabul"],
+      ["Kabul", "country", "Afghanistan"]
+    ]
+  },
+  {
+    "_id": "ex_comparison_yesno",
+    "type": "comparison",
+    "question": "Were Boraq Airlines and Xawery Zulawski from the same country?",
+    "answer": "no",
+    "supporting_facts": [["Boraq Airlines", 0], ["Xawery Zulawski", 0]],
+    "context": [
+      ["Boraq Airlines", ["Boraq Airlines was an airline with its headquarters in Kabul."]],
+      ["Xawery Zulawski", ["Xawery Zulawski is a Polish film director born in 1971 in Warsaw."]]
+    ],
+    "evidences": [
+      ["Boraq Airlines", "country", "Afghanistan"],
+      ["Xawery Zulawski", "country", "Poland"]
+    ]
+  }
+]

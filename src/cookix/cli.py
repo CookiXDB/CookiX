@@ -50,6 +50,18 @@ def _cmd_serve(args: argparse.Namespace) -> int:
 
 
 def _cmd_eval(args: argparse.Namespace) -> int:
+    if args.dataset:
+        from .eval import load_2wiki, run_dataset_eval, to_markdown_dataset
+
+        if not args.path:
+            print("error: --dataset requires --path to the dataset JSON "
+                  "(e.g. 2WikiMultiHopQA dev.json). See ROADMAP.md Phase 6.")
+            return 2
+        ds = load_2wiki(args.path, limit=args.limit)
+        report = run_dataset_eval(ds, k=args.k)
+        print(to_markdown_dataset(report))
+        return 0
+
     if args.perf:
         from .eval import run_perf_benchmark, to_markdown_perf
 
@@ -116,6 +128,11 @@ def main(argv: list[str] | None = None) -> int:
                     help="run the learned-sheaf residual ablation instead of retrieval")
     ev.add_argument("--perf", action="store_true",
                     help="time the query engine per ablation mode instead of scoring")
+    ev.add_argument("--dataset", choices=["2wiki"],
+                    help="evaluate on an external multi-hop QA dataset vs BM25")
+    ev.add_argument("--path", help="path to the dataset JSON (with --dataset)")
+    ev.add_argument("--limit", type=int, default=None,
+                    help="cap the number of dataset examples (with --dataset)")
     ev.set_defaults(func=_cmd_eval)
 
     args = parser.parse_args(argv)

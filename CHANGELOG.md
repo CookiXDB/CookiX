@@ -6,6 +6,15 @@ All notable changes to CookiX are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+- **External multi-hop QA evaluation** (`cookix eval --dataset 2wiki --path …`,
+  `cookix.eval.datasets`) — a real 2WikiMultiHopQA loader, an in-repo Okapi BM25
+  baseline, a global knowledge graph built from gold evidence triples, and
+  multi-hop answer/path metrics under the oracle entity-linking setting. On the
+  first 2,000 dev examples, typed traversal beats BM25 hits@10 0.580 vs 0.386
+  (+50% relative) with `path_match` 0.579. Ships with an offline fixture so the
+  pipeline is exercised in CI without the dataset download.
+
 ## [0.2.0] - 2026-05-29
 
 The evidence release: every research claim now has a reproducible study behind

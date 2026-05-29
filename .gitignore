@@ -28,6 +28,9 @@ coverage.xml
 *.kuzu/
 *.cookixdb
 
+# Downloaded benchmark datasets (large; reproducible via cookix eval --dataset)
+.cache_data/
+
 # IDE / OS
 .idea/
 .vscode/
