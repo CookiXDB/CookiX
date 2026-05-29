@@ -415,23 +415,31 @@ setting standard in KG-QA — CookiX is given the question's head entity as anch
 so it measures the *reasoning engine* (the paper's Algorithm 1).
 
 **Dropping the oracle — the honest open-domain result.** What happens when a
-real (imperfect) **entity linker** must pick the anchor? `cookix eval --dataset
-2wiki --no-oracle` uses a lexical BM25 linker; on the same 2,000 examples:
+real (imperfect) **entity linker** must pick the anchor from the raw question?
+`cookix eval --dataset 2wiki --no-oracle --linker {surface,bm25}`, same 2,000
+examples:
 
-| setting | CookiX hits@10 | MRR | path_match |
+| anchor source | link accuracy | CookiX hits@10 | MRR |
 |---|---|---|---|
-| oracle anchor | 0.580 | 0.282 | 0.579 |
-| **linked anchor (non-oracle)** | **0.340** | 0.168 | 0.331 |
-| BM25 (no linking needed) | 0.386 | 0.239 | n/a |
+| **oracle** (given) | 100% | **0.580** | 0.282 |
+| **surface linker** (name↔question) | **59.5%** | **0.378** | 0.183 |
+| BM25 linker (context match) | 50.1% | 0.340 | 0.168 |
+| — BM25 *retriever* (no linking needed) | — | 0.386 | 0.239 |
 
-The lexical linker recovers the gold head entity only **50.1%** of the time, and
-CookiX's advantage **evaporates** — at hits@10 0.340 it now *trails* BM25's 0.386,
-because half the time it starts traversing from the wrong anchor. The lesson,
-stated without spin: **the relational engine is strong when linked correctly, but
-end-to-end open-domain accuracy is gated by entity linking (and, for free text,
-extraction).** Closing that — a better/LLM linker and extractor — is the live
-frontier ([Phase 18](ROADMAP.md)), not a solved claim. CookiX still returns a
-reasoning path (`path_match` 0.33) where BM25 returns none.
+The story, stated without spin:
+
+- **The engine dominates when linked correctly** (0.580 vs BM25's 0.386, +50%).
+- **A correct-signal linker matters and is measurable.** Matching entity *names*
+  against the *question* (surface linker) beats matching paragraph content (BM25
+  linker): link accuracy 50.1% → **59.5%**, end-to-end hits@10 0.340 → **0.378**.
+- **That lifts CookiX from *losing* to *parity* with BM25 (0.378 vs 0.386) — and
+  it still returns the reasoning path BM25 cannot.** But it is **not yet an
+  outright end-to-end win.**
+- **Entity linking is the hard cap.** ~40% of questions still start from the wrong
+  anchor and can't recover. Clearing ~70%+ link accuracy is what flips the result
+  — the job of an **LLM-assisted linker** (the next step in
+  [Phase 18](ROADMAP.md)). We report parity, not victory, because that's what the
+  data shows.
 
 ### Extraction quality is the multi-hop ceiling
 

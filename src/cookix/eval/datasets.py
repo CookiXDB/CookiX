@@ -296,6 +296,7 @@ def run_dataset_eval(
     modes: tuple[str, ...] = ("graph", "reasoning"),
     max_hops: int = 4,
     oracle_anchor: bool = True,
+    linker: str = "surface",
 ) -> DatasetReport:
     """Score CookiX traversal vs BM25 on multi-hop answer-entity retrieval.
 
@@ -314,6 +315,11 @@ def run_dataset_eval(
 
     bm25 = BM25Retriever({key: entity_text.get(key, key) for key in nodes})
 
+    entity_linker = None
+    if not oracle_anchor:
+        from .linking import make_linker
+        entity_linker = make_linker(linker, nodes, entity_text)
+
     rows: dict[str, _Acc] = {"bm25": _Acc()}
     for m in modes:
         rows[f"cookix-{m}"] = _Acc()
@@ -325,7 +331,7 @@ def run_dataset_eval(
         if oracle_anchor:
             anchor = gold_anchor
         else:
-            anchor = link_anchor(ex.question, bm25, nodes)
+            anchor = entity_linker.link(ex.question)
             if anchor == gold_anchor:
                 link_hits += 1
 
@@ -356,8 +362,8 @@ def run_dataset_eval(
     else:
         acc = (link_hits / len(evaluable)) if evaluable else 0.0
         note = (
-            f"End-to-end (non-oracle) setting: the anchor is chosen by a lexical "
-            f"entity linker (BM25), which recovered the gold head entity "
+            f"End-to-end (non-oracle) setting: the anchor is chosen by the "
+            f"'{linker}' entity linker, which recovered the gold head entity "
             f"{acc * 100:.1f}% of the time. CookiX's drop vs the oracle run is the "
             f"entity-linking cost — the honest open-domain frontier."
         )

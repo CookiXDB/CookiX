@@ -373,17 +373,20 @@ the Docker workflow builds + runs + scans the image green. The exit gate is met.
 
 ## Phase 18 — Close the open-domain quality gap *(end-to-end, non-oracle)* — ◐ MEASURED
 
-- **Done:** an **entity-linking** stage (`--no-oracle`) so the anchor is chosen by
-  a lexical BM25 linker, not given. Published the honest end-to-end number on
-  2WikiMultiHopQA (2,000 dev examples): the linker recovers the gold head entity
-  **50.1%** of the time, and CookiX falls from **hits@10 0.580 (oracle) → 0.340
-  (linked)** — *below* BM25's 0.386. The finding, stated without spin: **the
-  relational engine is strong when linked correctly, but end-to-end open-domain
-  accuracy is gated by entity linking.** CookiX still returns a reasoning path
-  (`path_match` 0.33) where BM25 returns none.
-- **Remaining:** a stronger/LLM **entity linker** (the obvious lever — at perfect
-  linking CookiX returns to 0.58), a quantified **LLM extractor**, a **dense-
-  retriever** baseline, and **HotpotQA** + **MuSiQue** loaders.
+- **Done:** a pluggable **entity-linking** stage (`--no-oracle --linker
+  {surface,bm25}`). Two linkers, measured on 2WikiMultiHopQA (2,000 dev):
+  - **surface** (match entity *names* against the *question*) — link accuracy
+    **59.5%**, CookiX hits@10 **0.378**.
+  - **bm25** (match paragraph content) — link accuracy 50.1%, hits@10 0.340.
+  - oracle (given) — hits@10 0.580; BM25 *retriever* baseline — 0.386.
+- **Honest result:** the correct-signal linker lifts CookiX from *below* BM25
+  (0.340) to **parity** (0.378 vs 0.386) — and CookiX still returns the reasoning
+  path. **Not yet an outright end-to-end win.** Entity linking is the hard cap:
+  ~40% of questions start from the wrong anchor. Clearing ~70%+ link accuracy is
+  what flips it.
+- **Remaining (the lever that flips it):** an **LLM-assisted linker** (needs an
+  API key), plus a quantified **LLM extractor**, a **dense-retriever** baseline,
+  and **HotpotQA** + **MuSiQue** loaders.
 - **Exit gate:** published end-to-end (non-oracle) numbers vs a dense retriever on
   three datasets, with an honest win/loss verdict.
 

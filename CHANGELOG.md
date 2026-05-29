@@ -6,6 +6,19 @@ All notable changes to CookiX are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.1.9] - 2026-05-29
+
+### Added
+- **Pluggable entity linkers** (`cookix.eval.linking`, `cookix eval --dataset
+  2wiki --no-oracle --linker {surface,bm25}`). The new **surface-form linker**
+  matches entity *names* against the *question* (the right signal) instead of
+  paragraph content. On 2WikiMultiHopQA (2,000 dev): link accuracy 50.1% →
+  **59.5%**, end-to-end CookiX hits@10 0.340 → **0.378** — lifting CookiX from
+  *below* the BM25 retriever (0.386) to **parity**, while still returning the
+  reasoning path. Honest finding: entity linking remains the hard cap; clearing
+  ~70%+ link accuracy (an LLM-assisted linker) is what flips it to an outright
+  end-to-end win.
+
 ## [1.1.8] - 2026-05-29
 
 ### Changed
