@@ -27,10 +27,12 @@ def _cmd_demo(args: argparse.Namespace) -> int:
 
     db = DEMOS[args.scenario]()
     print(f"Loaded '{args.scenario}' demo: {len(db)} Knowledge Objects\n")
-    if args.scenario == "umbrella":
-        anchor, target = "umbrella", "wet_coat"
-    else:
-        anchor, target = "pipe_120mm", "steel_pipe"
+    anchors = {
+        "umbrella": ("umbrella", "wet_coat"),
+        "pipe": ("pipe_120mm", "steel_pipe"),
+        "deps": ("checkout_api", "CVE_2024_5001"),
+    }
+    anchor, target = anchors[args.scenario]
     print(f"Query: reasoning path from '{anchor}' to '{target}'\n")
     for result in db.query(anchor=anchor, target=target, mode="reasoning"):
         print("  " + result.explain())
@@ -141,11 +143,11 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     demo = sub.add_parser("demo", help="run a built-in demo scenario")
-    demo.add_argument("scenario", choices=["umbrella", "pipe"])
+    demo.add_argument("scenario", choices=["umbrella", "pipe", "deps"])
     demo.set_defaults(func=_cmd_demo)
 
     srv = sub.add_parser("serve", help="launch the HTTP server + reasoning-path UI")
-    srv.add_argument("--demo", choices=["umbrella", "pipe"], default="umbrella",
+    srv.add_argument("--demo", choices=["umbrella", "pipe", "deps"], default="umbrella",
                      help="demo database to load on start (default: umbrella)")
     srv.add_argument("--host", default="127.0.0.1")
     srv.add_argument("--port", type=int, default=8000)

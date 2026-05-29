@@ -6,6 +6,16 @@ All notable changes to CookiX are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.1.7] - 2026-05-29
+
+### Added
+- **Real-world example: software supply-chain impact analysis**
+  (`examples/supply_chain.py`, `cookix demo deps`, `cookix serve --demo deps`).
+  "Which services are reachable by this CVE, and through which dependency chain?"
+  — a service `depends_on` a library that `depends_on` another that is
+  `affected_by` a CVE. Computes the blast radius with the exact multi-hop path
+  per service. A `supply_chain_db()` demo + a standalone script + a test.
+
 ## [1.1.6] - 2026-05-29
 
 ### Fixed
