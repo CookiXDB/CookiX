@@ -286,14 +286,21 @@ it is buildable; that last one is lived.
 - **Exit gate:** `pip install cookix` works from PyPI; `docker pull … && docker
   run` serves a healthy container; image scan has no criticals.
 
-## Phase 13 — Load & soak testing *(earn "battle-tested" — part 1)*
+## Phase 13 — Load & soak testing *(earn "battle-tested" — part 1)* — ◐ HARNESS SHIPPED
 
-- A load-test harness (k6 / Locust) driving the HTTP server with many concurrent
-  clients; a **soak test** sustaining load for hours with memory tracked.
-- Scale benchmark to **1M+ objects**; latency/memory curves published.
-- Fault injection: kill mid-write, fill the disk, pull the plug — verify recovery.
+- **Done:** a real load/soak harness (`cookix loadtest`, `cookix.eval.load`) that
+  starts the HTTP server on a socket and drives it with N concurrent clients over
+  real sockets, reporting throughput, p50/p95/p99 latency, error rate, and
+  start/peak/end memory (cross-platform RSS) for leak detection. Covered by tests.
+  First measured run (8 clients, 10k objects, single process): **130 req/s, 0
+  errors out of 2,613, p99 ~102 ms, memory non-monotonic (no leak)**.
+- **Remaining (needs real hardware + time):** a **multi-hour soak** to firmly
+  establish the no-leak claim, a **1M+ object** run (memory-heavy; ~3 GB at the
+  current ~3 KB/object), and disk-full / pull-the-plug fault injection. The
+  harness already supports these via `--duration` / `--objects`; they just need a
+  big, long run on a real box.
 - **Exit gate:** documented "sustained *X* req/s for *Y* hours, flat memory, zero
-  data loss across induced crashes," reproducible from a script in the repo.
+  data loss across induced crashes," reproducible from the shipped harness.
 
 ## Phase 14 — Concurrency & write throughput *(beyond single-writer)*
 

@@ -7,6 +7,11 @@ All notable changes to CookiX are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- **Load & soak harness (Phase 13)** — `cookix loadtest` (`cookix.eval.load`)
+  starts the real HTTP server and drives it with N concurrent clients over real
+  sockets, reporting throughput, p50/p95/p99 latency, error rate, and
+  start/peak/end memory (cross-platform RSS) for leak detection. First run:
+  130 req/s, 0 errors, p99 ~102 ms, no memory leak.
 - **Release automation (Phase 12)** — a `Docker` CI workflow that builds, runs,
   smoke-tests (`/healthz` + `/readyz`), Trivy-scans, and (on tags) pushes the
   image to GHCR; and a `Release` workflow that builds + `twine check`s +

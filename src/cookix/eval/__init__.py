@@ -48,6 +48,7 @@ from .harness import (
     RetrieverScore,
     run_benchmark,
 )
+from .load import LoadReport, run_load_test, to_markdown_load
 from .perf import (
     PerfReport,
     PerfRow,
@@ -93,6 +94,9 @@ __all__ = [
     "ScaleRow",
     "run_scale_benchmark",
     "to_markdown_scale",
+    "LoadReport",
+    "run_load_test",
+    "to_markdown_load",
     "BM25Retriever",
     "RelExample",
     "RelationalDataset",

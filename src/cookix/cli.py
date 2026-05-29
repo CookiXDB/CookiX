@@ -116,6 +116,19 @@ def _cmd_eval(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_loadtest(args: argparse.Namespace) -> int:
+    from .eval import run_load_test, to_markdown_load
+
+    print(f"Load test: {args.workers} clients × {args.duration}s on "
+          f"{args.objects} objects (starting server on :{args.port})…")
+    report = run_load_test(
+        objects=args.objects, workers=args.workers,
+        duration_s=args.duration, port=args.port,
+    )
+    print(to_markdown_load(report))
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="cookix", description=__doc__)
     parser.add_argument("--version", action="version", version=f"cookix {__version__}")
@@ -164,6 +177,13 @@ def main(argv: list[str] | None = None) -> int:
     ev.add_argument("--limit", type=int, default=None,
                     help="cap the number of dataset examples (with --dataset)")
     ev.set_defaults(func=_cmd_eval)
+
+    lt = sub.add_parser("loadtest", help="load/soak-test the HTTP server with concurrent clients")
+    lt.add_argument("--objects", type=int, default=5000, help="graph size (default: 5000)")
+    lt.add_argument("--workers", type=int, default=8, help="concurrent clients (default: 8)")
+    lt.add_argument("--duration", type=float, default=10.0, help="seconds to run (default: 10)")
+    lt.add_argument("--port", type=int, default=8917, help="server port (default: 8917)")
+    lt.set_defaults(func=_cmd_loadtest)
 
     args = parser.parse_args(argv)
     return args.func(args)
