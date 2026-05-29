@@ -48,7 +48,9 @@ class Database:
         config: EngineConfig | None = None,
         extractor: Extractor | None = None,
     ) -> None:
-        self.storage = storage or get_backend("memory")
+        # NB: an empty backend is falsy (``__len__ == 0``), so test against None
+        # explicitly — ``storage or ...`` would silently discard a real backend.
+        self.storage = storage if storage is not None else get_backend("memory")
         self.engine = QueryEngine(self.storage, config)
         self.extractor = extractor or RuleBasedExtractor()
         self._topo_dirty = False
@@ -244,6 +246,26 @@ class Database:
             raise NotImplementedError(f"{type(self.storage).__name__} does not support save()")
         save(path)
 
+    def transaction(self):
+        """An atomic, durable write batch (durable backend only).
+
+        Usage::
+
+            with db.transaction():
+                db.insert(a)
+                db.insert(b)   # both committed together, or neither on error
+
+        Raises :class:`NotImplementedError` on backends without transactions.
+        """
+        txn = getattr(self.storage, "transaction", None)
+        if txn is None:
+            raise NotImplementedError(
+                f"{type(self.storage).__name__} does not support transactions; "
+                "use the 'durable' backend"
+            )
+        self._topo_dirty = True
+        return txn()
+
 
 def connect(
     name: str | None = None,
@@ -262,7 +284,7 @@ def connect(
         extractor: relation/intent extractor (defaults to rule-based).
         **backend_kwargs: forwarded to the backend factory.
     """
-    if backend == "kuzu" and name and "path" not in backend_kwargs:
+    if backend in ("kuzu", "durable") and name and "path" not in backend_kwargs:
         backend_kwargs["path"] = name
     storage = get_backend(backend, **backend_kwargs)
     return Database(storage=storage, config=config, extractor=extractor)

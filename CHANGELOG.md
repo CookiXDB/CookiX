@@ -7,6 +7,12 @@ All notable changes to CookiX are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- **Crash-safe `durable` storage backend** (`cookix.connect(path,
+  backend="durable")`) — a write-ahead log (fsync-on-commit, CRC-framed
+  torn-write tolerance), atomic snapshots (temp file + `os.replace`),
+  all-or-nothing write-batch transactions (`with db.transaction(): …`),
+  thread-safe single-writer locking, and backup/restore. Three backends now
+  share the behavioural-parity contract (memory, durable, Kùzu).
 - **Scaling benchmark** (`cookix eval --scale`, `cookix.eval.run_scale_benchmark`)
   — build cost, query latency and peak memory as the graph grows from 1k to 50k+
   objects. Query latency stays near-flat (~1.5→2.2 ms across a 50× size increase).
@@ -22,6 +28,12 @@ All notable changes to CookiX are documented here. The format follows
 - **Geodesic search is now settle-once Dijkstra** with early-exit on a requested
   target: a node is never re-expanded once its minimum-cost path is fixed. Same
   results, far less work on large/dense graphs.
+- **In-memory `save()` is now atomic** (temp file + `os.replace`), so a crash
+  mid-write can no longer leave a corrupt snapshot.
+
+### Fixed
+- `Database` no longer discards a non-default backend when it happens to be empty
+  (an empty backend is falsy via `__len__`; the constructor now tests `is None`).
 
 ## [0.2.0] - 2026-05-29
 

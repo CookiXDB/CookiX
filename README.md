@@ -161,13 +161,33 @@ db.query(anchor="a", target="b", mode="reasoning") # full pipeline
 ### Durable storage and topological indexing
 
 The engine depends only on a small `StorageBackend` contract, so the store is
-swappable. Two backends ship with **behavioural parity** (a shared test battery
-runs against both): the default in-memory NetworkX store, and a durable embedded
-**Kùzu** property-graph store.
+swappable. Three backends ship with **behavioural parity** (a shared test battery
+runs against them): the default in-memory NetworkX store, a **crash-safe durable**
+store (pure Python), and a durable embedded **Kùzu** property-graph store.
 
 ```python
-db = cookix.connect("graph.kuzu", backend="kuzu")   # durable, on-disk
+db = cookix.connect("graph.kuzu", backend="kuzu")        # embedded property graph
+db = cookix.connect("data/mydb", backend="durable")      # WAL + atomic snapshots
 ```
+
+**Durability you can rely on.** The `durable` backend gives a production database
+the guarantees a volatile store cannot:
+
+- **Write-ahead log** — every mutation is `fsync`'d to an append-only log before
+  it is acknowledged, and the log is **torn-write tolerant** (a half-written tail
+  from a crash is detected by a per-record CRC and dropped on replay, recovering
+  to the last fully-durable record).
+- **Atomic snapshots** — folding the WAL into a snapshot is a temp-file +
+  `os.replace`, so a crash mid-snapshot can never corrupt the previous good one.
+- **Atomic transactions** — `with db.transaction(): …` is an all-or-nothing write
+  batch committed with a single `fsync`; an error in the block rolls back and
+  writes nothing.
+- **Thread-safe** — a re-entrant lock serialises writers (single-writer,
+  multi-reader); concurrent writes cannot interleave into a corrupt graph or log.
+- **Backup / restore** — point-in-time snapshot to a file and rebuild from it.
+
+These are covered by a crash-recovery, atomic-rollback, concurrency-stress and
+backup/restore test battery.
 
 For shape-based retrieval at scale, `TopoIndex` provides approximate
 nearest-neighbour search over persistence signatures via cosine LSH — sublinear
@@ -423,7 +443,7 @@ algorithmic win shipped here is the settle-once/early-exit Dijkstra, in Python.
 
 - [x] **Phase 6** — *Credibility gate.* External validation on **2WikiMultiHopQA** (`cookix eval --dataset 2wiki`): gold-triple knowledge graph vs Okapi BM25 over the same paragraphs. **hits@10 0.58 vs 0.39** (+50% rel.) and `path_match` 0.58 on 2,000 dev examples, under oracle entity-linking. *Next: HotpotQA/MuSiQue loaders + a dense-retriever baseline.*
 - [~] **Phase 7** — *Performance gate (partial).* Scaling benchmark (`cookix eval --scale`) + settle-once/early-exit Dijkstra: **query latency near-flat ~2 ms from 1k→50k objects**, ~3 KB/object. Rust/PyO3 hot-path core still **deferred** (needs a Rust toolchain not present in this environment).
-- [ ] **Phase 8** — *Data-safety gate.* Crash-safe persistence (WAL + atomic snapshot), transactions, concurrent read/write, backup/restore — proven by crash-recovery and concurrency stress tests.
+- [x] **Phase 8** — *Data-safety gate.* `durable` backend: write-ahead log (fsync-on-commit, CRC torn-write tolerance), atomic snapshots, atomic-batch transactions, thread-safe single-writer locking, backup/restore — proven by a crash-recovery, rollback, concurrency-stress and round-trip test battery.
 - [ ] **Phase 9** — *Deployability gate.* Auth + rate limiting + input/resource limits, structured logging + metrics + health checks, hardened Docker image, security review.
 - [ ] **Phase 10** — *Distribution gate.* Frozen versioned API (OpenAPI) + SemVer policy, typed Python client, cross-platform wheels on PyPI, on-disk migration tooling.
 - [ ] **Phase 11 / v1.0** — Full docs, perf-regression CI, end-to-end smoke test. Released only when gates 6–10 all hold.

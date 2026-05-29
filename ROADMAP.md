@@ -102,9 +102,19 @@ candidate generator also remains open.
 
 ---
 
-## Phase 8 — Durability, transactions & concurrency *(data-safety gate)*
+## Phase 8 — Durability, transactions & concurrency *(data-safety gate)* — ✅ DONE
 
 A database must not lose or corrupt data, and must behave under concurrent use.
+
+**Result:** a pure-Python `durable` backend (`cookix.connect(path,
+backend="durable")`) with a write-ahead log (fsync-on-commit, CRC-framed
+torn-write tolerance), atomic snapshots (temp + `os.replace`), all-or-nothing
+write-batch transactions (`with db.transaction(): …`), thread-safe single-writer
+locking, and backup/restore. Proven by a test battery: committed writes survive a
+crash with no snapshot (WAL replay), a torn WAL tail is dropped, transactions
+commit atomically or roll back on error, 8 concurrent writers lose no updates, and
+backup→restore round-trips to an equivalent store. *(Also fixed a latent bug: an
+empty backend is falsy, so `Database` was silently discarding it.)*
 
 **Deliverables**
 - Crash-safe persistence: atomic snapshot + write-ahead log for the in-memory

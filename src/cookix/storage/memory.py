@@ -7,6 +7,7 @@ traversal and inverse-edge walking, which the query engine relies on.
 
 from __future__ import annotations
 
+import os
 import pickle
 from collections.abc import Iterator
 from pathlib import Path
@@ -86,8 +87,19 @@ class InMemoryBackend(StorageBackend):
         return self._graph
 
     def save(self, path: str | Path) -> None:
-        with open(path, "wb") as fh:
+        """Snapshot to disk atomically: write a temp file, fsync, then replace.
+
+        Writing in place would leave a corrupt half-written file if the process
+        died mid-write; temp-file-plus-atomic-replace guarantees the destination
+        is always either the old snapshot or the complete new one.
+        """
+        path = Path(path)
+        tmp = path.with_suffix(path.suffix + ".tmp")
+        with open(tmp, "wb") as fh:
             pickle.dump(self._objects, fh)
+            fh.flush()
+            os.fsync(fh.fileno())
+        os.replace(tmp, path)
 
     @classmethod
     def load(cls, path: str | Path) -> InMemoryBackend:
