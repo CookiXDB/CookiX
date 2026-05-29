@@ -245,3 +245,106 @@ Naming these prevents scope creep and over-promising:
   release blocker.
 - **A managed/hosted service.** Out of scope; this roadmap delivers the engine
   and the self-hostable server only.
+
+---
+
+# Road to fully production-hardened (post-1.0)
+
+`v1.0` is production-ready for a **careful single-node deployment you control**.
+It is *not* yet ready for public-internet, multi-tenant, or high-scale use, and
+it has **zero production mileage**. This part of the roadmap closes that gap.
+
+Each gap I flagged maps to a phase below, with a hard exit gate. One honest
+caveat up front: **"battle-tested" cannot be engineered in a sprint** — it is
+earned by real deployments running for real time (Phase 19). Everything before
+it is buildable; that last one is lived.
+
+| Gap (today) | Phase that closes it |
+|---|---|
+| Docker image not build-validated; not on PyPI | **12** |
+| Never run under real load / for real duration | **13** |
+| Single-writer; limited write throughput | **14** |
+| Pure-Python hot path (no Rust core) | **15** |
+| Defaults open; not safe public-facing / multi-tenant | **16** |
+| Single-node only (no HA / horizontal scale) | **17** |
+| Open-domain quality is extraction-limited (oracle linking) | **18** |
+| No production mileage / SLOs proven in the wild | **19** |
+
+## Phase 12 — Validated, published artifacts *(distribution, for real)*
+
+- **Build *and run* the Docker image in CI** (GitHub Actions has a Docker
+  daemon), smoke-test `/healthz`, then publish to GHCR / Docker Hub.
+- Container vulnerability scan (Trivy/grype) wired into CI.
+- **Automated PyPI publish** via GitHub trusted publishing (OIDC, tag-triggered)
+  + `cibuildwheel` matrix scaffolding (ready for the Rust core).
+- **Exit gate:** `pip install cookix` works from PyPI; `docker pull … && docker
+  run` serves a healthy container; image scan has no high/criticals.
+
+## Phase 13 — Load & soak testing *(earn "battle-tested" — part 1)*
+
+- A load-test harness (k6 / Locust) driving the HTTP server with many concurrent
+  clients; a **soak test** sustaining load for hours with memory tracked.
+- Scale benchmark to **1M+ objects**; latency/memory curves published.
+- Fault injection: kill mid-write, fill the disk, pull the plug — verify recovery.
+- **Exit gate:** documented "sustained *X* req/s for *Y* hours, flat memory, zero
+  data loss across induced crashes," reproducible from a script in the repo.
+
+## Phase 14 — Concurrency & write throughput *(beyond single-writer)*
+
+- The durable backend is single-writer (one global lock). Add **group-commit**
+  (batch WAL fsyncs), finer-grained locking or MVCC, and async server workers.
+- Read-only **follower replicas** built from snapshot + WAL tail.
+- **Exit gate:** measured write-throughput gain over the 1.0 baseline; documented
+  concurrent read/write SLOs under the Phase 13 load harness.
+
+## Phase 15 — Rust hot-path core *(the deferred 1.0 item)*
+
+- PyO3 crate for the geodesic traversal + composite-rank inner loop, behind a
+  feature flag, with a Python-parity test battery and `cibuildwheel` wheels.
+- **Exit gate:** Rust and Python produce identical rankings; a documented
+  end-to-end speedup; wheels build for Linux/macOS/Windows.
+
+## Phase 16 — Public-facing & multi-tenant hardening
+
+- TLS termination + reverse-proxy reference configs (nginx/Caddy); secure-by-
+  default deployment profile (auth + rate limit required to bind non-loopback).
+- Multiple API keys with **roles** (read/write/admin), per-tenant **namespaces**
+  with isolation, and **distributed rate limiting** (shared store, e.g. Redis).
+- Audit logging + request tracing (OpenTelemetry).
+- **Exit gate:** a documented multi-tenant deployment, an external security
+  review with high/criticals resolved, and a pen-test checklist run.
+
+## Phase 17 — Distributed / high availability *(horizontal scale)*
+
+- Replication (primary + replicas) with failover; optional sharding by
+  key/namespace; automated backups with point-in-time recovery.
+- **Exit gate:** survives a node loss with no data loss; horizontal **read**
+  scaling demonstrated under load.
+
+## Phase 18 — Close the open-domain quality gap *(end-to-end, non-oracle)*
+
+- Quantify the **LLM extractor** vs rule-based on real data; add an **entity-
+  linking** stage so the anchor is no longer an oracle.
+- Add a **dense-retriever** baseline; extend the external suite to **HotpotQA**
+  and **MuSiQue** alongside 2WikiMultiHopQA.
+- **Exit gate:** published **end-to-end (non-oracle)** numbers vs dense retrievers
+  on three datasets, with an honest verdict on where CookiX wins and loses.
+
+## Phase 19 — Production mileage & GA *(the part only time buys)*
+
+- Real deployment(s); observability dashboards; an on-call runbook; defined SLAs.
+- Fuzzing + property-based tests; a long-running canary.
+- **Exit gate (honest):** months of real uptime, an incident runbook exercised at
+  least once, and SLOs met **in the wild** — not on a benchmark. This gate is
+  *lived, not coded*; no amount of in-repo work substitutes for it.
+
+---
+
+## What "100% production-ready" means here
+
+CookiX is "100% ready" when **all of Phases 12–19** hold: published and scanned
+artifacts, load/soak-proven, concurrent and (optionally) distributed, hardened
+for untrusted networks, extraction gap measured-or-closed, and — critically —
+**proven in real production over time**. Until Phase 19's lived gate is met, the
+honest status remains "1.0: production-ready for controlled single-node use,
+hardening in progress." We will not relabel that prematurely.

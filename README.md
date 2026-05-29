@@ -515,6 +515,17 @@ algorithmic win shipped here is the settle-once/early-exit Dijkstra, in Python.
 
 Explicitly **out of scope for v1.0**: distributed clustering/sharding, a hosted service, and any claim that the 𝒯/𝒮 layers help retrieval. **Post-1.0:** the Rust/PyO3 hot-path core, external HotpotQA/MuSiQue loaders + a dense-retriever baseline, and the actual PyPI publish.
 
+**Road to fully production-hardened (post-1.0).** v1.0 is production-ready for a *controlled single-node* deployment; making it safe for public-internet / multi-tenant / high-scale use is a further eight phases (12–19), each with a hard exit gate — see [ROADMAP.md](ROADMAP.md#road-to-fully-production-hardened-post-10):
+
+- [ ] **Phase 12** — Build+run Docker in CI, publish to GHCR + PyPI (OIDC), image scanning.
+- [ ] **Phase 13** — Load & soak testing (1M+ objects, sustained hours, fault injection).
+- [ ] **Phase 14** — Group-commit + finer-grained concurrency; read replicas.
+- [ ] **Phase 15** — Rust/PyO3 hot-path core (the deferred 1.0 item).
+- [ ] **Phase 16** — Public-facing/multi-tenant hardening (TLS, roles, namespaces, distributed rate limiting, tracing).
+- [ ] **Phase 17** — Distributed / HA: replication, failover, PITR backups.
+- [ ] **Phase 18** — Close the open-domain gap: entity linking (drop oracle), dense baseline, HotpotQA + MuSiQue.
+- [ ] **Phase 19** — Production mileage & GA — *earned over real uptime, not coded.*
+
 ---
 
 ## Contributing
