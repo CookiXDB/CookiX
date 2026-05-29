@@ -64,9 +64,9 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/cookix-db/cookix"
-Repository = "https://github.com/cookix-db/cookix"
-Issues = "https://github.com/cookix-db/cookix/issues"
+Homepage = "https://github.com/CookiXDB/CookiX"
+Repository = "https://github.com/CookiXDB/CookiX"
+Issues = "https://github.com/CookiXDB/CookiX/issues"
 
 [project.scripts]
 cookix = "cookix.cli:main"

@@ -270,7 +270,13 @@ it is buildable; that last one is lived.
 | Open-domain quality is extraction-limited (oracle linking) | **18** |
 | No production mileage / SLOs proven in the wild | **19** |
 
-## Phase 12 — Validated, published artifacts *(distribution, for real)* — ◐ WIRED
+## Phase 12 — Validated, published artifacts *(distribution, for real)* — ✅ DONE
+
+**`cookix` is live on PyPI (1.1.0)** — published via OIDC trusted publishing on the
+`v1.1.0` tag; `pip install cookix` installs and runs a query in a clean venv, and
+the Docker workflow builds + runs + scans the image green. The exit gate is met.
+
+
 
 - **Done (in-repo):** a `Docker` workflow (`.github/workflows/docker.yml`) that
   builds the image, **runs it and smoke-tests `/healthz` + `/readyz`**,

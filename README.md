@@ -558,7 +558,7 @@ Explicitly **out of scope for v1.0**: distributed clustering/sharding, a hosted 
 
 **Road to fully production-hardened (post-1.0).** v1.0 is production-ready for a *controlled single-node* deployment; making it safe for public-internet / multi-tenant / high-scale use is a further eight phases (12–19), each with a hard exit gate — see [ROADMAP.md](ROADMAP.md#road-to-fully-production-hardened-post-10):
 
-- [~] **Phase 12** — CI **wired**: a `Docker` workflow builds → runs → smoke-tests `/healthz` → Trivy-scans → pushes to GHCR on tags, and a `Release` workflow builds + verifies the wheel in a clean venv + publishes to PyPI via OIDC trusted publishing. *Gate confirms on the first tagged run after a maintainer configures the PyPI trusted publisher (see [RELEASING.md](RELEASING.md)).*
+- [x] **Phase 12** — **`pip install cookix` works — live on [PyPI](https://pypi.org/project/cookix/) (1.1.0)**, published via OIDC trusted publishing on the `v1.1.0` tag. The `Docker` workflow builds → runs → smoke-tests `/healthz` → Trivy-scans (green); the `Release` workflow builds + clean-venv-verifies the wheel + publishes. Gate met.
 - [~] **Phase 13** — Load/soak harness **shipped** (`cookix loadtest`): real server + concurrent clients, throughput/tail-latency/error-rate + memory sampling for leak detection. First run: **0 errors**, p99 ~100 ms, no leak. *Remaining: a multi-hour soak and a 1M-object run on real hardware.*
 - [~] **Phase 14** — WAL **group-commit** shipped (`group_commit=` toggle, correctness-tested). Honest finding: only ~3% here — the **single-writer lock + GIL**, not fsync, is the write bottleneck; real write-scaling needs finer-grained locking + multi-process serving. (Read replicas moved to Phase 17.)
 - [ ] **Phase 15** — Rust/PyO3 hot-path core. **Genuinely blocked here:** no Rust toolchain in this environment to compile or parity-test it, and I will not commit unbuildable code claiming to be a core. The settle-once/early-exit Dijkstra (Phase 7) is the interim pure-Python win; the CI cibuildwheel matrix (Phase 12) is ready to build the extension once written on a machine with `cargo`.
@@ -574,7 +574,7 @@ Explicitly **out of scope for v1.0**: distributed clustering/sharding, a hosted 
 CookiX is open source and welcomes contributors.
 
 ```bash
-git clone https://github.com/cookix-db/cookix.git
+git clone https://github.com/CookiXDB/CookiX.git
 cd cookix
 pip install -e ".[dev,all]"
 pytest
