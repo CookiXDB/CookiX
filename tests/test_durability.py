@@ -175,6 +175,40 @@ def test_group_commit_concurrent_writers_lose_nothing(tmp_path):
 
 
 # --------------------------------------------------------------------------- #
+# Read-only follower replicas (Phase 17)
+# --------------------------------------------------------------------------- #
+def test_read_replica_sees_committed_data_and_refuses_writes(tmp_path):
+    primary = DurableBackend(tmp_path / "db", autosnapshot_ops=10_000)
+    primary.put(_obj("a", [("causes", "b")]))
+    primary.put(_obj("b"))
+
+    replica = DurableBackend(tmp_path / "db", read_only=True)
+    assert "a" in replica and "b" in replica
+    assert replica.out_edges("a")[0].target == "b"
+
+    with pytest.raises(RuntimeError, match="read-only"):
+        replica.put(_obj("c"))
+    with pytest.raises(RuntimeError, match="read-only"):
+        with replica.transaction():
+            pass
+
+
+def test_read_replica_refresh_picks_up_new_writes(tmp_path):
+    primary = DurableBackend(tmp_path / "db", autosnapshot_ops=10_000)
+    primary.put(_obj("a"))
+
+    replica = DurableBackend(tmp_path / "db", read_only=True)
+    assert len(replica) == 1
+
+    # Primary keeps writing; replica is stale until it refreshes.
+    primary.put(_obj("b"))
+    primary.put(_obj("c"))
+    assert len(replica) == 1
+    replica.refresh()
+    assert len(replica) == 3 and "c" in replica
+
+
+# --------------------------------------------------------------------------- #
 # On-disk format versioning (migration guard)
 # --------------------------------------------------------------------------- #
 def test_snapshot_is_versioned_and_legacy_is_still_readable(tmp_path):

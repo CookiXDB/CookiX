@@ -563,7 +563,7 @@ Explicitly **out of scope for v1.0**: distributed clustering/sharding, a hosted 
 - [~] **Phase 14** — WAL **group-commit** shipped (`group_commit=` toggle, correctness-tested). Honest finding: only ~3% here — the **single-writer lock + GIL**, not fsync, is the write bottleneck; real write-scaling needs finer-grained locking + multi-process serving. (Read replicas moved to Phase 17.)
 - [ ] **Phase 15** — Rust/PyO3 hot-path core (the deferred 1.0 item).
 - [~] **Phase 16** — **API-key roles** (read/write/admin) + **secure-by-default binding** (refuse public bind without auth) shipped and tested. *Remaining: per-tenant data isolation, distributed rate limiting (Redis), OpenTelemetry tracing, TLS reference configs.*
-- [ ] **Phase 17** — Distributed / HA: replication, failover, PITR backups.
+- [~] **Phase 17** — **Read-only follower replicas** shipped (`backend="durable", read_only=True` + `refresh()`): a replica loads snapshot + WAL tail, refuses writes, and refreshes to follow the primary — the read-scaling building block. *Remaining: live WAL streaming, automatic failover, sharding.*
 - [~] **Phase 18** — **Non-oracle entity linking shipped** (`--no-oracle`): with a lexical linker (50% link accuracy) CookiX drops to hits@10 0.34 (below BM25's 0.39) — an honest measurement that **entity linking is the open-domain bottleneck**. *Remaining: a better/LLM linker, a dense-retriever baseline, HotpotQA + MuSiQue.*
 - [ ] **Phase 19** — Production mileage & GA — *earned over real uptime, not coded.*
 

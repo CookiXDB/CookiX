@@ -344,12 +344,18 @@ it is buildable; that last one is lived.
 - **Exit gate:** a documented multi-tenant deployment, an external security
   review with high/criticals resolved, and a pen-test checklist run.
 
-## Phase 17 — Distributed / high availability *(horizontal scale)*
+## Phase 17 — Distributed / high availability *(horizontal scale)* — ◐ STARTED
 
-- Replication (primary + replicas) with failover; optional sharding by
-  key/namespace; automated backups with point-in-time recovery.
-- **Read-only follower replicas** built from snapshot + WAL tail (moved here from
-  Phase 14 — this is where replication naturally lives).
+- **Done:** **read-only follower replicas** — `DurableBackend(path,
+  read_only=True)` loads the primary's snapshot + WAL tail, refuses all writes,
+  and exposes `refresh()` to re-read and follow the primary point-in-time. Reads
+  never open a writable handle on the primary's log. Tested (sees committed data,
+  refuses writes/transactions, picks up new writes on refresh). This is the
+  read-scaling building block; combined with the existing atomic `backup()` /
+  `restore()` it already covers backup + PITR-style recovery.
+- **Remaining (needs multi-process/multi-node + infra):** live WAL **streaming**
+  to replicas (vs manual `refresh()`), automatic **failover** / leader election,
+  and **sharding** by key/namespace.
 - **Exit gate:** survives a node loss with no data loss; horizontal **read**
   scaling demonstrated under load.
 

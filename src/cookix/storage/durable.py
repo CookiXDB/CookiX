@@ -45,7 +45,12 @@ class DurableBackend(StorageBackend):
     """In-memory speed with on-disk durability, atomic batches and locking."""
 
     def __init__(
-        self, path: str | Path, *, autosnapshot_ops: int = 1000, group_commit: bool = True
+        self,
+        path: str | Path,
+        *,
+        autosnapshot_ops: int = 1000,
+        group_commit: bool = True,
+        read_only: bool = False,
     ) -> None:
         self.dir = Path(path)
         self.dir.mkdir(parents=True, exist_ok=True)
@@ -54,6 +59,7 @@ class DurableBackend(StorageBackend):
         self._mem = InMemoryBackend()
         self._lock = threading.RLock()
         self._autosnapshot_ops = autosnapshot_ops
+        self._read_only = read_only
         self._ops_since_snapshot = 0
         self._in_txn = False
         self._txn_buffer: list[dict] = []
@@ -69,7 +75,8 @@ class DurableBackend(StorageBackend):
         self._fsync_lock = threading.Lock()
 
         self._recover()
-        self._wal = WriteAheadLog(self._wal_path)
+        # A read-only replica never opens a writable handle on the primary's log.
+        self._wal = None if read_only else WriteAheadLog(self._wal_path)
 
     # ------------------------------------------------------------------ #
     # Recovery
@@ -94,9 +101,22 @@ class DurableBackend(StorageBackend):
         if self._snap_path.exists():
             for obj in self._load_snapshot(self._snap_path).values():
                 self._mem.put(obj)
-        if self._wal_path.exists():
-            for record in WriteAheadLog(self._wal_path).replay():
-                self._apply(record)
+        # Read records without opening a writable handle (safe for replicas too).
+        for record in WriteAheadLog.read_records(self._wal_path):
+            self._apply(record)
+
+    def refresh(self) -> None:
+        """Re-load a read-only replica from disk to pick up the primary's writes.
+
+        Rebuilds in-memory state from the latest snapshot + WAL tail. A simple
+        point-in-time follower; the primary fsyncs before acknowledging, so a
+        refreshed replica sees every committed write up to the moment it reads.
+        """
+        if not self._read_only:
+            raise RuntimeError("refresh() is for read-only replicas")
+        with self._lock:
+            self._mem = InMemoryBackend()
+            self._recover()
 
     def _apply(self, record: dict) -> None:
         if record["op"] == "put":
@@ -125,6 +145,8 @@ class DurableBackend(StorageBackend):
 
     def _durable_write(self, record: dict) -> None:
         """Apply + persist a single record, via group commit when enabled."""
+        if self._read_only:
+            raise RuntimeError("this is a read-only replica; writes are not allowed")
         if self.group_commit:
             with self._lock:
                 self._wal.append_nosync(record)
@@ -187,6 +209,8 @@ class DurableBackend(StorageBackend):
         return DurableBackend._Txn(self)
 
     def _begin(self) -> None:
+        if self._read_only:
+            raise RuntimeError("this is a read-only replica; transactions are not allowed")
         self._lock.acquire()  # held for the whole transaction: serialisable writers
         self._in_txn = True
         self._txn_buffer = []
@@ -223,6 +247,8 @@ class DurableBackend(StorageBackend):
 
     def snapshot(self) -> None:
         """Fold the WAL into an atomic on-disk snapshot, then clear the WAL."""
+        if self._read_only:
+            return  # replicas never write snapshots
         with self._lock:
             self._atomic_write_snapshot(self._snap_path)
             # Hold the fsync lock while truncating so we never close/reopen the
@@ -295,5 +321,7 @@ class DurableBackend(StorageBackend):
 
     def close(self) -> None:
         with self._lock:
+            if self._read_only:
+                return  # nothing to flush or close on a replica
             self.snapshot()
             self._wal.close()

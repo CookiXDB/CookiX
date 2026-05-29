@@ -77,6 +77,34 @@ class WriteAheadLog:
         self._fh.flush()
         os.fsync(self._fh.fileno())
 
+    @staticmethod
+    def read_records(path: str | Path) -> list[Any]:
+        """Read all fully-durable records from ``path`` without opening it for append.
+
+        Used by recovery and by read-only replicas, which must not hold a writable
+        handle on the primary's log.
+        """
+        path = Path(path)
+        if not path.exists():
+            return []
+        records: list[Any] = []
+        with open(path, "rb") as fh:
+            data = fh.read()
+        off, n = 0, len(data)
+        while off + _LEN.size <= n:
+            (length,) = _LEN.unpack(data[off:off + _LEN.size])
+            start = off + _LEN.size
+            end = start + length
+            if end + _CRC.size > n:
+                break
+            payload = data[start:end]
+            (crc,) = _CRC.unpack(data[end:end + _CRC.size])
+            if zlib.crc32(payload) != crc:
+                break
+            records.append(pickle.loads(payload))
+            off = end + _CRC.size
+        return records
+
     def replay(self) -> list[Any]:
         """Return every fully-durable record, stopping at the first torn frame."""
         records: list[Any] = []

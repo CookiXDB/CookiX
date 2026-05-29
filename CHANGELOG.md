@@ -7,6 +7,10 @@ All notable changes to CookiX are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- **Read-only follower replicas (Phase 17)** — `DurableBackend(path,
+  read_only=True)` loads the primary's snapshot + WAL tail, refuses writes, and
+  offers `refresh()` to follow the primary point-in-time (the read-scaling
+  building block). Reads never hold a writable handle on the primary's log.
 - **Non-oracle entity linking (Phase 18)** — `cookix eval --dataset 2wiki
   --no-oracle` chooses the anchor with a lexical BM25 entity linker instead of
   the gold one. Honest end-to-end result on 2WikiMultiHopQA: linker recovers the
