@@ -7,6 +7,12 @@ All notable changes to CookiX are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- **Production server hardening** (`cookix.server.ServerConfig`, `COOKIX_*` env,
+  `cookix serve --api-key/--rate-limit/--read-only`) — opt-in API-key auth
+  (constant-time), per-client rate limiting, `k`/`max_hops`/body-size limits,
+  read-only mode, structured JSON access logs, a dependency-free Prometheus
+  `/metrics` endpoint, and `/healthz` + `/readyz` probes. Documented threat model
+  in `SECURITY.md`; a hardened non-root `Dockerfile` ships in the repo.
 - **Crash-safe `durable` storage backend** (`cookix.connect(path,
   backend="durable")`) — a write-ahead log (fsync-on-commit, CRC-framed
   torn-write tolerance), atomic snapshots (temp file + `os.replace`),

@@ -38,14 +38,30 @@ def _cmd_demo(args: argparse.Namespace) -> int:
 
 
 def _cmd_serve(args: argparse.Namespace) -> int:
-    from .server import serve
+    from .server import ServerConfig, serve
+
+    cfg = ServerConfig.from_env()
+    if args.api_key:
+        cfg.api_key = args.api_key
+    if args.rate_limit:
+        cfg.rate_limit_rpm = args.rate_limit
+    if args.read_only:
+        cfg.read_only = True
 
     where = f"http://{args.host}:{args.port}"
     print(f"CookiX server + reasoning-path explorer: {where}")
     if args.demo:
         print(f"  loaded '{args.demo}' demo (use --demo to change, or build your own db)")
+    guards = []
+    if cfg.auth_enabled:
+        guards.append("auth")
+    if cfg.rate_limit_rpm:
+        guards.append(f"rate-limit={cfg.rate_limit_rpm}/min")
+    if cfg.read_only:
+        guards.append("read-only")
+    print(f"  protections: {', '.join(guards) if guards else 'none (open server)'}")
     print("  press Ctrl+C to stop")
-    serve(demo=args.demo, host=args.host, port=args.port)
+    serve(demo=args.demo, host=args.host, port=args.port, config=cfg)
     return 0
 
 
@@ -118,6 +134,12 @@ def main(argv: list[str] | None = None) -> int:
                      help="demo database to load on start (default: umbrella)")
     srv.add_argument("--host", default="127.0.0.1")
     srv.add_argument("--port", type=int, default=8000)
+    srv.add_argument("--api-key", help="require this API key on data endpoints "
+                     "(or set COOKIX_API_KEY)")
+    srv.add_argument("--rate-limit", type=int, default=0,
+                     help="max requests per minute per client (0 = unlimited)")
+    srv.add_argument("--read-only", action="store_true",
+                     help="reject all mutations (serve a frozen database)")
     srv.set_defaults(func=_cmd_serve)
 
     ev = sub.add_parser("eval", help="run the reproducible benchmark suite")

@@ -193,6 +193,27 @@ For shape-based retrieval at scale, `TopoIndex` provides approximate
 nearest-neighbour search over persistence signatures via cosine LSH — sublinear
 TVS lookup, deterministic, with an exact fallback and a built-in recall measure.
 
+### Running the server in production
+
+The embedded library is the trusted interface; the HTTP server (`cookix serve`)
+adds **opt-in** operational controls for networked deployment (all off by default
+so the demo just works). See [SECURITY.md](SECURITY.md) for the full threat model.
+
+```bash
+cookix serve --api-key "$KEY" --rate-limit 600   # auth + 600 req/min/client
+# or via env: COOKIX_API_KEY, COOKIX_RATE_LIMIT_RPM, COOKIX_MAX_K,
+#             COOKIX_MAX_HOPS, COOKIX_MAX_BODY_BYTES, COOKIX_READ_ONLY
+```
+
+- **Auth** — API key (`Authorization: Bearer` / `X-API-Key`), constant-time compared.
+- **Rate limiting** — per-client fixed window → `429` with `Retry-After`.
+- **Resource limits** — `k`/`max_hops` clamped, request body capped (`413`).
+- **Read-only mode** — reject mutations (`403`) to serve a frozen database.
+- **Observability** — `/healthz`, `/readyz`, Prometheus `/metrics`, JSON access logs.
+
+A hardened, non-root [`Dockerfile`](Dockerfile) (with a `/healthz` HEALTHCHECK)
+ships in the repo: `docker build -t cookix . && docker run -p 8000:8000 cookix`.
+
 ---
 
 ## The honest status
@@ -444,7 +465,7 @@ algorithmic win shipped here is the settle-once/early-exit Dijkstra, in Python.
 - [x] **Phase 6** — *Credibility gate.* External validation on **2WikiMultiHopQA** (`cookix eval --dataset 2wiki`): gold-triple knowledge graph vs Okapi BM25 over the same paragraphs. **hits@10 0.58 vs 0.39** (+50% rel.) and `path_match` 0.58 on 2,000 dev examples, under oracle entity-linking. *Next: HotpotQA/MuSiQue loaders + a dense-retriever baseline.*
 - [~] **Phase 7** — *Performance gate (partial).* Scaling benchmark (`cookix eval --scale`) + settle-once/early-exit Dijkstra: **query latency near-flat ~2 ms from 1k→50k objects**, ~3 KB/object. Rust/PyO3 hot-path core still **deferred** (needs a Rust toolchain not present in this environment).
 - [x] **Phase 8** — *Data-safety gate.* `durable` backend: write-ahead log (fsync-on-commit, CRC torn-write tolerance), atomic snapshots, atomic-batch transactions, thread-safe single-writer locking, backup/restore — proven by a crash-recovery, rollback, concurrency-stress and round-trip test battery.
-- [ ] **Phase 9** — *Deployability gate.* Auth + rate limiting + input/resource limits, structured logging + metrics + health checks, hardened Docker image, security review.
+- [x] **Phase 9** — *Deployability gate.* API-key auth, per-client rate limiting, `k`/`max_hops`/body-size limits, read-only mode, JSON access logs, Prometheus `/metrics`, `/healthz` + `/readyz`, a documented threat model ([SECURITY.md](SECURITY.md)), and a hardened non-root `Dockerfile`. *(App hardening test-proven; the container image is provided but not build-validated in this environment.)*
 - [ ] **Phase 10** — *Distribution gate.* Frozen versioned API (OpenAPI) + SemVer policy, typed Python client, cross-platform wheels on PyPI, on-disk migration tooling.
 - [ ] **Phase 11 / v1.0** — Full docs, perf-regression CI, end-to-end smoke test. Released only when gates 6–10 all hold.
 

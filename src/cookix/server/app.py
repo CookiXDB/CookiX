@@ -11,6 +11,7 @@ Run with ``cookix serve`` (see :mod:`cookix.cli`).
 
 from __future__ import annotations
 
+import time
 from pathlib import Path
 from typing import Any
 
@@ -19,6 +20,14 @@ import numpy as np
 from ..database import Database
 from ..engine import RetrievalMode
 from ..model import QueryResult
+from .security import (
+    Metrics,
+    RateLimiter,
+    ServerConfig,
+    check_api_key,
+    extract_key,
+    log_request,
+)
 
 _STATIC_DIR = Path(__file__).parent / "static"
 
@@ -95,15 +104,19 @@ def _serialize_result(r: QueryResult) -> dict[str, Any]:
     }
 
 
-def create_app(db: Database) -> Any:
+def create_app(db: Database, config: ServerConfig | None = None) -> Any:
     """Build a FastAPI app bound to ``db``.
 
     Imported lazily so the core library has no hard dependency on FastAPI;
     ``cookix[server]`` installs it. Raises a helpful error if it is missing.
+
+    ``config`` carries the operational policy (auth, rate limiting, resource
+    limits, read-only, metrics). It defaults to :meth:`ServerConfig.from_env`, so
+    all protections are off unless explicitly enabled — the demo UI just works.
     """
     try:
-        from fastapi import Body, FastAPI
-        from fastapi.responses import FileResponse
+        from fastapi import Body, Depends, FastAPI, Header, HTTPException, Request
+        from fastapi.responses import FileResponse, PlainTextResponse
         from fastapi.staticfiles import StaticFiles
     except ImportError as exc:  # pragma: no cover
         raise ImportError(
@@ -111,7 +124,69 @@ def create_app(db: Database) -> Any:
             '    pip install "cookix[server]"'
         ) from exc
 
+    cfg = config or ServerConfig.from_env()
+    metrics = Metrics()
+    limiter = RateLimiter(cfg.rate_limit_rpm)
+
     app = FastAPI(title="CookiX", version=_version())
+
+    def _client(request: Request) -> str:
+        key = extract_key(request.headers)
+        if key:
+            return f"key:{key[:8]}"
+        return request.client.host if request.client else "unknown"
+
+    @app.middleware("http")
+    async def _ops_middleware(request: Request, call_next):
+        start = time.perf_counter()
+        client = _client(request)
+
+        # Body-size cap (reject before reading the payload).
+        clen = request.headers.get("content-length")
+        if clen and clen.isdigit() and int(clen) > cfg.max_body_bytes:
+            metrics.observe(request.url.path, 413, 0.0)
+            return PlainTextResponse("request body too large", status_code=413)
+
+        # Rate limit.
+        allowed, retry = limiter.check(client)
+        if not allowed:
+            metrics.inc_rate_limited()
+            elapsed = (time.perf_counter() - start) * 1000.0
+            log_request(request.method, request.url.path, 429, elapsed, client)
+            metrics.observe(request.url.path, 429, elapsed)
+            return PlainTextResponse(
+                "rate limit exceeded", status_code=429, headers={"Retry-After": str(retry)}
+            )
+
+        response = await call_next(request)
+        elapsed = (time.perf_counter() - start) * 1000.0
+        if cfg.enable_metrics:
+            metrics.observe(request.url.path, response.status_code, elapsed)
+        log_request(request.method, request.url.path, response.status_code, elapsed, client)
+        return response
+
+    def require_auth(
+        authorization: str | None = Header(default=None),
+        x_api_key: str | None = Header(default=None),
+    ) -> None:
+        """FastAPI dependency: enforce the API key on protected endpoints.
+
+        Reads the key from ``Authorization: Bearer <key>`` or ``X-API-Key``. Uses
+        header parameters (not the raw Request) so the annotation resolves cleanly
+        under ``from __future__ import annotations``.
+        """
+        if not cfg.auth_enabled:
+            return
+        provided = None
+        if authorization and authorization.lower().startswith("bearer "):
+            provided = authorization[7:].strip()
+        elif x_api_key:
+            provided = x_api_key
+        if not check_api_key(provided, cfg.api_key):
+            metrics.inc_auth_failure()
+            raise HTTPException(status_code=401, detail="invalid or missing API key")
+
+    auth = [Depends(require_auth)]
 
     @app.get("/api/info")
     def info() -> dict[str, Any]:
@@ -125,16 +200,36 @@ def create_app(db: Database) -> Any:
             "relations": relations.vocabulary(),
         }
 
-    @app.get("/api/graph")
+    @app.get("/healthz")
+    def healthz() -> dict[str, str]:
+        """Liveness probe: the process is up and serving."""
+        return {"status": "ok"}
+
+    @app.get("/readyz")
+    def readyz() -> dict[str, Any]:
+        """Readiness probe: the database is reachable."""
+        try:
+            n = len(db)
+        except Exception:  # pragma: no cover - defensive
+            raise HTTPException(status_code=503, detail="database not ready") from None
+        return {"status": "ready", "objects": n}
+
+    @app.get("/metrics")
+    def metrics_endpoint() -> Any:
+        if not cfg.enable_metrics:
+            raise HTTPException(status_code=404, detail="metrics disabled")
+        return PlainTextResponse(metrics.render_prometheus())
+
+    @app.get("/api/graph", dependencies=auth)
     def graph() -> dict[str, Any]:
         return _serialize_graph(db)
 
-    @app.get("/api/sheaf")
+    @app.get("/api/sheaf", dependencies=auth)
     def sheaf_geometry() -> dict[str, Any]:
         """Stalks as 3D unit vectors + the edges connecting them."""
         return _serialize_sheaf(db, dim=3)
 
-    @app.post("/api/sheaf/trace")
+    @app.post("/api/sheaf/trace", dependencies=auth)
     def sheaf_trace(payload: dict = Body(...)) -> dict[str, Any]:
         """Carry an object's stalk along a reasoning path, step by step.
 
@@ -194,22 +289,38 @@ def create_app(db: Database) -> Any:
             "residual": residual,
         }
 
-    @app.post("/api/insert")
+    @app.post("/api/insert", dependencies=auth)
     def insert(payload: dict = Body(...)) -> dict[str, str]:
+        if cfg.read_only:
+            raise HTTPException(status_code=403, detail="server is read-only")
         document = payload.get("document", payload)
+        if not isinstance(document, dict):
+            raise HTTPException(status_code=422, detail="document must be an object")
         obj_id = db.insert(document)
         return {"id": obj_id}
 
-    @app.post("/api/query")
+    @app.post("/api/query", dependencies=auth)
     def query(payload: dict = Body(...)) -> dict[str, Any]:
+        # Clamp resource-bounding parameters so one request cannot ask the engine
+        # to do unbounded work.
+        try:
+            k = max(1, min(int(payload.get("k", 5)), cfg.max_k))
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=422, detail="k must be an integer") from None
+        max_hops = payload.get("max_hops")
+        if max_hops is not None:
+            try:
+                max_hops = max(1, min(int(max_hops), cfg.max_hops_limit))
+            except (TypeError, ValueError):
+                raise HTTPException(status_code=422, detail="max_hops must be an integer") from None
         results = db.query(
             payload.get("query"),
             anchor=payload.get("anchor"),
             relation=payload.get("relation"),
             target=payload.get("target"),
-            k=int(payload.get("k", 5)),
+            k=k,
             mode=payload.get("mode", "reasoning"),
-            max_hops=payload.get("max_hops"),
+            max_hops=max_hops,
         )
         return {"results": [_serialize_result(r) for r in results]}
 
@@ -239,12 +350,16 @@ def serve(
     demo: str | None = None,
     host: str = "127.0.0.1",
     port: int = 8000,
+    config: ServerConfig | None = None,
 ) -> None:
     """Start the CookiX HTTP server + reasoning-path explorer UI.
 
     If no database is supplied, loads a named ``demo`` (default ``"umbrella"``)
-    so the UI has something to show on first launch.
+    so the UI has something to show on first launch. ``config`` (or the
+    ``COOKIX_*`` environment) controls auth, rate limiting and resource limits.
     """
+    import logging
+
     try:
         import uvicorn
     except ImportError as exc:  # pragma: no cover
@@ -252,11 +367,13 @@ def serve(
             'The CookiX server requires uvicorn. Install it with: pip install "cookix[server]"'
         ) from exc
 
+    logging.basicConfig(level=logging.INFO)  # surface the structured access logs
+
     if db is None:
         from ..demos import DEMOS
 
         builder = DEMOS.get(demo or "umbrella")
         db = builder() if builder else Database()
 
-    app = create_app(db)
+    app = create_app(db, config)
     uvicorn.run(app, host=host, port=port)

@@ -132,7 +132,20 @@ empty backend is falsy, so `Database` was silently discarding it.)*
 
 ---
 
-## Phase 9 — Operational hardening & security *(deployability gate)*
+## Phase 9 — Operational hardening & security *(deployability gate)* — ✅ DONE
+
+**Result:** the HTTP server gained opt-in production controls (`ServerConfig` /
+`COOKIX_*` env): API-key auth (constant-time, `Bearer`/`X-API-Key`), per-client
+fixed-window rate limiting (`429` + `Retry-After`), `k`/`max_hops`/body-size
+limits, read-only mode, structured JSON access logs, a no-dependency Prometheus
+`/metrics` endpoint, and `/healthz` + `/readyz` probes — all covered by tests.
+A documented threat model with explicit limitations ships in `SECURITY.md`, and a
+hardened, non-root `Dockerfile` (+ `/healthz` HEALTHCHECK) ships in the repo.
+*Honest caveat: the app hardening is test-proven via the FastAPI test client, but
+the container image itself was not build-validated here (no running Docker
+daemon in this environment).*
+
+_Original plan:_
 
 **Deliverables**
 - Server authentication (API keys / bearer tokens), per-key rate limiting, and
