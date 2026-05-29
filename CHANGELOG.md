@@ -6,6 +6,17 @@ All notable changes to CookiX are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.1.3] - 2026-05-29
+
+### Fixed
+- **Explorer UIs now work offline / behind firewalls.** The reasoning-path and
+  3D sheaf explorers loaded `vis-network` and `three.js` from the unpkg CDN, so a
+  blocked/offline browser saw a blank canvas. The libraries are now **vendored**
+  under `static/vendor/` and served locally — no external requests. This also
+  fixes the sheaf explorer's broken OrbitControls (the pinned `three@0.149`
+  global `examples/js` build no longer exists upstream); vendored a matched
+  `three@0.137` + OrbitControls pair instead.
+
 ## [1.1.2] - 2026-05-29
 
 ### Added

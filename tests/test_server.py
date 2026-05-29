@@ -17,6 +17,18 @@ def client() -> TestClient:
     return TestClient(create_app(umbrella_db()))
 
 
+def test_ui_assets_are_vendored_locally(client: TestClient):
+    """The explorer UIs must work offline: viz libs served from /static, no CDN."""
+    for path in ("/static/vendor/vis-network.min.js",
+                 "/static/vendor/three.min.js",
+                 "/static/vendor/OrbitControls.js"):
+        r = client.get(path)
+        assert r.status_code == 200 and len(r.content) > 1000
+    # No page may depend on an external CDN.
+    assert "unpkg.com" not in client.get("/").text
+    assert "unpkg.com" not in client.get("/sheaf").text
+
+
 def test_info(client: TestClient):
     info = client.get("/api/info").json()
     assert info["name"] == "CookiX"
