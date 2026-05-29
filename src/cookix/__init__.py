@@ -23,7 +23,7 @@ from .database import Database, connect
 from .engine import EngineConfig, QueryEngine, RetrievalMode
 from .model import Edge, KnowledgeObject, QueryResult, ReasoningStep
 
-__version__ = "1.1.0"
+__version__ = "1.1.1"
 
 __all__ = [
     "__version__",

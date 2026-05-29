@@ -6,6 +6,13 @@ All notable changes to CookiX are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-05-29
+
+### Fixed
+- **PyPI README rendering** — the logo and demo media used repo-relative paths,
+  which render on GitHub but break on PyPI. Switched all images to absolute
+  raw-GitHub URLs so the project page on PyPI shows them.
+
 ## [1.1.0] - 2026-05-29
 
 The hardening release: post-1.0 work toward production-readiness. Read-only
