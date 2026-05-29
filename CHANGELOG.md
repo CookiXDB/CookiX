@@ -6,6 +6,13 @@ All notable changes to CookiX are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.1.2] - 2026-05-29
+
+### Added
+- **`python -m cookix`** now works as an alias for the `cookix` CLI (added
+  `cookix/__main__.py`). Handy on Windows when the console-script shim isn't on
+  PATH — `python -m cookix info` needs no PATH setup.
+
 ## [1.1.1] - 2026-05-29
 
 ### Fixed
