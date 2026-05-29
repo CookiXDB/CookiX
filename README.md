@@ -158,6 +158,21 @@ db.query(anchor="a", target="b", mode="sheaf")     # + sheaf
 db.query(anchor="a", target="b", mode="reasoning") # full pipeline
 ```
 
+### Durable storage and topological indexing
+
+The engine depends only on a small `StorageBackend` contract, so the store is
+swappable. Two backends ship with **behavioural parity** (a shared test battery
+runs against both): the default in-memory NetworkX store, and a durable embedded
+**Kùzu** property-graph store.
+
+```python
+db = cookix.connect("graph.kuzu", backend="kuzu")   # durable, on-disk
+```
+
+For shape-based retrieval at scale, `TopoIndex` provides approximate
+nearest-neighbour search over persistence signatures via cosine LSH — sublinear
+TVS lookup, deterministic, with an exact fallback and a built-in recall measure.
+
 ---
 
 ## The honest status
@@ -306,7 +321,7 @@ layer stays ablatable so the answer is measured, not assumed.
 - [x] **Phase 1** — Reproducible benchmark harness (`cookix eval`): synthetic relational corpus, fair vector-family + no-skill baselines, all ablations, deterministic from one seed. *Next: port to external multi-hop datasets.*
 - [x] **Phase 2** — Extraction-quality study (`cookix eval --extraction`): gold-triple corpus, precision/recall/F1 + relation-typing accuracy, and the measured per-edge `pʰ` multi-hop ceiling. *Next: quantify how much an LLM extractor buys back.*
 - [x] **Phase 3** — Learned sheaf restriction maps (`cookix eval --sheaf`): orthogonal-Procrustes maps learned per relation, ~50–60% held-out residual drop vs the random placeholder. *Next: neural sheaf diffusion (jointly learn stalks + maps).*
-- [ ] **Phase 4** — Durable Kùzu backend hardening + TopoIndex (ANN over persistence diagrams)
+- [x] **Phase 4** — Durable Kùzu backend hardened to in-memory parity (shared test battery: dangling-target and incoming-edge semantics) + `TopoIndex` (cosine-LSH ANN over persistence signatures, with exact fallback + recall measure).
 - [ ] **Phase 5** — Rust hot-path core via PyO3; optional server mode
 - [ ] **v1.0** — Production release
 

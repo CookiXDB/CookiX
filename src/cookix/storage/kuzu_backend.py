@@ -9,6 +9,17 @@ without running a server. This backend is optional::
 It is intentionally schema-light: a single ``KObject`` node table and a single
 ``REL`` relationship table carrying the relation type as a property, which keeps
 the controlled vocabulary open-ended.
+
+Semantics are kept at **parity** with :class:`~cookix.storage.memory.InMemoryBackend`:
+
+* A node referenced only as an edge *target* (a "dangling" target that was never
+  explicitly inserted) is materialised with ``materialized = false`` and is
+  invisible to :meth:`get`, :meth:`__contains__`, :meth:`__len__` and
+  :meth:`all_ids` — exactly as a dangling target is in the memory backend — yet
+  remains traversable as an edge endpoint until it is inserted for real.
+* :meth:`put` replaces only the object's **outgoing** edges; incoming edges from
+  other objects survive, so materialising a previously-dangling target never
+  destroys the edges that pointed at it.
 """
 
 from __future__ import annotations
@@ -40,7 +51,7 @@ class KuzuBackend(StorageBackend):
     def _ensure_schema(self) -> None:
         self._conn.execute(
             "CREATE NODE TABLE IF NOT EXISTS KObject("
-            "id STRING, content STRING, meta STRING, PRIMARY KEY(id))"
+            "id STRING, content STRING, meta STRING, materialized BOOLEAN, PRIMARY KEY(id))"
         )
         self._conn.execute(
             "CREATE REL TABLE IF NOT EXISTS REL("
@@ -48,15 +59,20 @@ class KuzuBackend(StorageBackend):
         )
 
     def put(self, obj: KnowledgeObject) -> None:
-        self.delete(obj.id)
+        # Upsert the node and promote it to materialised, preserving any incoming
+        # edges (a previously-dangling target keeps the edges that point at it).
         self._conn.execute(
-            "CREATE (o:KObject {id: $id, content: $content, meta: $meta})",
+            "MERGE (o:KObject {id: $id}) "
+            "SET o.content = $content, o.meta = $meta, o.materialized = true",
             {"id": obj.id, "content": obj.content, "meta": json.dumps(obj.meta)},
         )
+        # Replace semantics: drop only this object's existing outgoing edges.
+        self._conn.execute("MATCH (s:KObject {id: $id})-[r:REL]->() DELETE r", {"id": obj.id})
         for edge in obj.edges:
-            # Target node must exist for the relationship to be created.
+            # Target must exist; a brand-new target is dangling (not materialised).
             self._conn.execute(
-                "MERGE (t:KObject {id: $tid}) ON CREATE SET t.content = '', t.meta = '{}'",
+                "MERGE (t:KObject {id: $tid}) "
+                "ON CREATE SET t.content = '', t.meta = '{}', t.materialized = false",
                 {"tid": edge.target},
             )
             self._conn.execute(
@@ -68,7 +84,8 @@ class KuzuBackend(StorageBackend):
 
     def get(self, obj_id: str) -> KnowledgeObject | None:
         res = self._conn.execute(
-            "MATCH (o:KObject {id: $id}) RETURN o.content, o.meta", {"id": obj_id}
+            "MATCH (o:KObject {id: $id}) WHERE o.materialized RETURN o.content, o.meta",
+            {"id": obj_id},
         )
         if not res.has_next():
             return None
@@ -85,16 +102,16 @@ class KuzuBackend(StorageBackend):
 
     def __contains__(self, obj_id: str) -> bool:
         res = self._conn.execute(
-            "MATCH (o:KObject {id: $id}) RETURN count(o)", {"id": obj_id}
+            "MATCH (o:KObject {id: $id}) WHERE o.materialized RETURN count(o)", {"id": obj_id}
         )
         return bool(res.has_next() and res.get_next()[0] > 0)
 
     def __len__(self) -> int:
-        res = self._conn.execute("MATCH (o:KObject) RETURN count(o)")
+        res = self._conn.execute("MATCH (o:KObject) WHERE o.materialized RETURN count(o)")
         return int(res.get_next()[0]) if res.has_next() else 0
 
     def all_ids(self) -> Iterator[str]:
-        res = self._conn.execute("MATCH (o:KObject) RETURN o.id")
+        res = self._conn.execute("MATCH (o:KObject) WHERE o.materialized RETURN o.id")
         while res.has_next():
             yield res.get_next()[0]
 
