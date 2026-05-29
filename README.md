@@ -436,10 +436,18 @@ The story, stated without spin:
   it still returns the reasoning path BM25 cannot.** But it is **not yet an
   outright end-to-end win.**
 - **Entity linking is the hard cap.** ~40% of questions still start from the wrong
-  anchor and can't recover. Clearing ~70%+ link accuracy is what flips the result
-  — the job of an **LLM-assisted linker** (the next step in
-  [Phase 18](ROADMAP.md)). We report parity, not victory, because that's what the
-  data shows.
+  anchor and can't recover. Clearing ~70%+ link accuracy is what flips the result.
+- **An LLM-assisted linker now ships** (`--linker llm`, needs `cookix[llm]` + an
+  `ANTHROPIC_API_KEY`): it shortlists candidates with the surface linker, then
+  lets Claude pick the head entity. The code is tested; running the keyed
+  benchmark to confirm it clears ~70% and flips the end-to-end result is the open
+  step (we don't report a number we haven't measured):
+
+  ```bash
+  cookix eval --dataset 2wiki --path dev.json --no-oracle --linker llm --k 10
+  ```
+
+We report parity, not victory, because that's what the data shows today.
 
 ### Extraction quality is the multi-hop ceiling
 

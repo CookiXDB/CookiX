@@ -6,6 +6,18 @@ All notable changes to CookiX are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.1.10] - 2026-05-29
+
+### Added
+- **LLM-assisted entity linker** (`cookix.eval.linking.LLMEntityLinker`,
+  `cookix eval --dataset 2wiki --no-oracle --linker llm`). Shortlists candidates
+  with the surface linker, then has Claude pick the question's head entity —
+  mirrors `LLMExtractor` (lazy `anthropic` import, injectable client). Logic is
+  unit-tested with a mock client; the keyed at-scale benchmark (which would
+  confirm whether it clears the ~70% link accuracy needed to flip the end-to-end
+  result) needs an `ANTHROPIC_API_KEY` and is the maintainer's to run. No number
+  is claimed until measured.
+
 ## [1.1.9] - 2026-05-29
 
 ### Added

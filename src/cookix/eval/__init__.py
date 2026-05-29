@@ -48,7 +48,12 @@ from .harness import (
     RetrieverScore,
     run_benchmark,
 )
-from .linking import ContextBM25Linker, SurfaceFormLinker, make_linker
+from .linking import (
+    ContextBM25Linker,
+    LLMEntityLinker,
+    SurfaceFormLinker,
+    make_linker,
+)
 from .load import LoadReport, run_load_test, to_markdown_load
 from .perf import (
     PerfReport,
@@ -108,5 +113,6 @@ __all__ = [
     "to_markdown_dataset",
     "SurfaceFormLinker",
     "ContextBM25Linker",
+    "LLMEntityLinker",
     "make_linker",
 ]

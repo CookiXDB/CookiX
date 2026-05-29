@@ -384,9 +384,14 @@ the Docker workflow builds + runs + scans the image green. The exit gate is met.
   path. **Not yet an outright end-to-end win.** Entity linking is the hard cap:
   ~40% of questions start from the wrong anchor. Clearing ~70%+ link accuracy is
   what flips it.
-- **Remaining (the lever that flips it):** an **LLM-assisted linker** (needs an
-  API key), plus a quantified **LLM extractor**, a **dense-retriever** baseline,
-  and **HotpotQA** + **MuSiQue** loaders.
+- **LLM-assisted linker shipped (code):** `--linker llm` shortlists with the
+  surface linker then has Claude pick the head entity (`cookix.eval.linking.
+  LLMEntityLinker`, mirrors `LLMExtractor`; logic unit-tested with a mock client).
+  The **keyed benchmark run** that confirms it clears ~70% link accuracy and flips
+  the end-to-end result is the open step — it needs an `ANTHROPIC_API_KEY`, so it
+  is the maintainer's to run; no number is claimed until it's measured.
+- **Remaining:** the keyed LLM-linker benchmark, a quantified **LLM extractor**, a
+  **dense-retriever** baseline, and **HotpotQA** + **MuSiQue** loaders.
 - **Exit gate:** published end-to-end (non-oracle) numbers vs a dense retriever on
   three datasets, with an honest win/loss verdict.
 

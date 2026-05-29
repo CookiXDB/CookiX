@@ -185,8 +185,8 @@ def main(argv: list[str] | None = None) -> int:
                     help="cap the number of dataset examples (with --dataset)")
     ev.add_argument("--no-oracle", action="store_true",
                     help="with --dataset: link the anchor (no oracle entity-linking)")
-    ev.add_argument("--linker", choices=["surface", "bm25"], default="surface",
-                    help="with --no-oracle: entity-linking strategy (default: surface)")
+    ev.add_argument("--linker", choices=["surface", "bm25", "llm"], default="surface",
+                    help="with --no-oracle: entity-linking strategy (llm needs an API key)")
     ev.set_defaults(func=_cmd_eval)
 
     lt = sub.add_parser("loadtest", help="load/soak-test the HTTP server with concurrent clients")
