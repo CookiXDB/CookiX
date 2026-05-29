@@ -6,6 +6,15 @@ All notable changes to CookiX are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.1.4] - 2026-05-29
+
+### Fixed
+- **Sheaf explorer dropdowns populate even if the 3D view fails.** `init()` called
+  `initScene()` first, so any three.js/WebGL failure threw before the anchor/target
+  `<select>`s were filled — leaving them empty. Controls and the server-side path
+  trace are now wired *before* the best-effort 3D scene, which is wrapped in a
+  try/catch that shows a note instead of blanking the page.
+
 ## [1.1.3] - 2026-05-29
 
 ### Fixed

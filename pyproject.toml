@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "cookix"
-version = "1.1.3"
+version = "1.1.4"
 description = "The open-source topological-relational memory database. Reference implementation of the NoVectDB paradigm."
 readme = "README.md"
 requires-python = ">=3.10"

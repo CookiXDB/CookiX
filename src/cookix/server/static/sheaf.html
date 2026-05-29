@@ -282,20 +282,40 @@
     }
 
     async function init() {
-      initScene();
-      const g = await api("/api/sheaf");
-      drawNodes(g.nodes);
+      // Load the data and wire the CONTROLS first — these must work even if the
+      // 3D scene cannot render (e.g. WebGL disabled). The path trace + residual
+      // come from the server and do not depend on three.js.
+      let g;
+      try {
+        g = await api("/api/sheaf");
+      } catch (e) {
+        document.getElementById("steps").innerHTML =
+          '<div class="step">Could not reach /api/sheaf: ' + e.message + '</div>';
+        return;
+      }
       const anchorSel = document.getElementById("anchor");
       const targetSel = document.getElementById("target");
+      g.nodes.forEach(n => { nodeMap[n.id] = n.stalk; });
       g.nodes.map(n => n.id).sort().forEach(id => {
         anchorSel.add(new Option(id, id));
         targetSel.add(new Option(id, id));
       });
-      // Sensible default for the umbrella demo.
       if (nodeMap["umbrella"]) anchorSel.value = "umbrella";
       if (nodeMap["wet_coat"]) targetSel.value = "wet_coat";
       else if (targetSel.options.length > 1) targetSel.selectedIndex = 1;
       document.getElementById("trace").onclick = runTrace;
+
+      // The 3D view is best-effort: if three.js/WebGL is unavailable, the trace
+      // still works — we just show a note instead of the sphere.
+      try {
+        initScene();
+        drawNodes(g.nodes);
+      } catch (e) {
+        const el = document.getElementById("scene");
+        if (el) el.innerHTML =
+          '<div style="padding:24px;color:#b09b82;font-size:13px">3D view unavailable ('
+          + e.message + '). The path trace and residual on the left still work.</div>';
+      }
     }
 
     init();
