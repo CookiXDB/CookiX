@@ -32,6 +32,12 @@
   <code>pip install cookix</code> · model your domain as typed edges · get explainable multi-hop retrieval — no server, no infra.
 </p>
 
+<p align="center">
+  <img src="https://raw.githubusercontent.com/CookiXDB/CookiX/master/assets/demo.gif" alt="CookiX 30-second demo — a relational question, the reasoning path lighting up, a real supply-chain CVE blast-radius, and an honest benchmark" width="760" />
+  <br>
+  <sub>30-second tour · <a href="https://raw.githubusercontent.com/CookiXDB/CookiX/master/assets/demo.mp4">MP4</a> · regenerate with <code>python scripts/make_demo_video.py</code></sub>
+</p>
+
 ---
 
 ## What is CookiX?
