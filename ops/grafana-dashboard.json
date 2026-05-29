@@ -1,0 +1,66 @@
+{
+  "__comment": "CookiX server dashboard. Import into Grafana with a Prometheus datasource scraping the server's /metrics endpoint. Panels map to the cookix_* metrics emitted by cookix.server.security.Metrics.",
+  "title": "CookiX server",
+  "schemaVersion": 39,
+  "editable": true,
+  "tags": ["cookix"],
+  "templating": {
+    "list": [
+      {
+        "name": "datasource",
+        "type": "datasource",
+        "query": "prometheus",
+        "current": {}
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Request rate by status",
+      "type": "timeseries",
+      "datasource": "${datasource}",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+      "targets": [
+        {
+          "expr": "sum by (status) (rate(cookix_requests_total[5m]))",
+          "legendFormat": "{{status}}"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Mean request latency (ms)",
+      "type": "timeseries",
+      "datasource": "${datasource}",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+      "targets": [
+        {"expr": "cookix_request_latency_ms_avg", "legendFormat": "avg ms"}
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Error rate (4xx/5xx fraction)",
+      "type": "timeseries",
+      "datasource": "${datasource}",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+      "targets": [
+        {
+          "expr": "sum(rate(cookix_requests_total{status=~\"4..|5..\"}[5m])) / clamp_min(sum(rate(cookix_requests_total[5m])), 1)",
+          "legendFormat": "error fraction"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Rejections: rate-limited & auth failures",
+      "type": "timeseries",
+      "datasource": "${datasource}",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+      "targets": [
+        {"expr": "rate(cookix_rate_limited_total[5m])", "legendFormat": "rate-limited/s"},
+        {"expr": "rate(cookix_auth_failures_total[5m])", "legendFormat": "auth-failures/s"}
+      ]
+    }
+  ]
+}

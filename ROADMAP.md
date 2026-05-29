@@ -322,10 +322,16 @@ it is buildable; that last one is lived.
 - **Exit gate:** a documented write-throughput gain on an `fsync`-bound disk, and
   concurrent read/write SLOs under the Phase 13 harness.
 
-## Phase 15 — Rust hot-path core *(the deferred 1.0 item)*
+## Phase 15 — Rust hot-path core *(the deferred 1.0 item)* — ⛔ BLOCKED HERE
 
 - PyO3 crate for the geodesic traversal + composite-rank inner loop, behind a
   feature flag, with a Python-parity test battery and `cibuildwheel` wheels.
+- **Genuinely blocked in this environment:** there is no Rust toolchain (`cargo`)
+  to compile or parity-test the extension, and committing unbuildable Rust that
+  claims to be "the core" would violate the honesty bar this project holds. The
+  Phase 7 settle-once/early-exit Dijkstra is the interim pure-Python win, and the
+  Phase 12 CI is already structured to build the extension via `cibuildwheel`
+  once the crate is written on a machine with `cargo`.
 - **Exit gate:** Rust and Python produce identical rankings; a documented
   end-to-end speedup; wheels build for Linux/macOS/Windows.
 
@@ -375,13 +381,18 @@ it is buildable; that last one is lived.
 - **Exit gate:** published end-to-end (non-oracle) numbers vs a dense retriever on
   three datasets, with an honest win/loss verdict.
 
-## Phase 19 — Production mileage & GA *(the part only time buys)*
+## Phase 19 — Production mileage & GA *(the part only time buys)* — ◐ GROUNDWORK DONE
 
-- Real deployment(s); observability dashboards; an on-call runbook; defined SLAs.
-- Fuzzing + property-based tests; a long-running canary.
-- **Exit gate (honest):** months of real uptime, an incident runbook exercised at
-  least once, and SLOs met **in the wild** — not on a benchmark. This gate is
-  *lived, not coded*; no amount of in-repo work substitutes for it.
+- **Done (the codeable parts):** an on-call **runbook** (`RUNBOOK.md`) covering
+  health/alerts, common incidents (latency, memory, crash recovery, corruption,
+  auth spikes) and routine ops; a **Grafana dashboard** for the `/metrics`
+  endpoint (`ops/grafana-dashboard.json`); and **model-based fuzz tests**
+  (`tests/test_fuzz.py`) that drive the durable backend with random op sequences
+  plus simulated crashes, checking it against a reference model, and assert query
+  robustness on random graphs.
+- **The gate that remains — and cannot be coded:** months of **real uptime**
+  through **real incidents**, an incident runbook exercised for real, and SLOs met
+  **in the wild**. No in-repo work substitutes for this; it is earned by running.
 
 ---
 

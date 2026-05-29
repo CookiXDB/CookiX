@@ -7,6 +7,11 @@ All notable changes to CookiX are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- **Operational groundwork (Phase 19)** — an on-call `RUNBOOK.md`, a Grafana
+  dashboard (`ops/grafana-dashboard.json`) for the `/metrics` endpoint, and
+  model-based fuzz tests (`tests/test_fuzz.py`) that check the durable backend
+  against a reference model under random ops + simulated crashes, and assert
+  query robustness on random graphs.
 - **Read-only follower replicas (Phase 17)** — `DurableBackend(path,
   read_only=True)` loads the primary's snapshot + WAL tail, refuses writes, and
   offers `refresh()` to follow the primary point-in-time (the read-scaling
