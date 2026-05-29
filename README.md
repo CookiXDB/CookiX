@@ -353,8 +353,16 @@ targets exactly the geodesic/ranking inner loop these numbers measure.
 - [x] **Phase 3** — Learned sheaf restriction maps (`cookix eval --sheaf`): orthogonal-Procrustes maps learned per relation, ~50–60% held-out residual drop vs the random placeholder. *Next: neural sheaf diffusion (jointly learn stalks + maps).*
 - [x] **Phase 4** — Durable Kùzu backend hardened to in-memory parity (shared test battery: dangling-target and incoming-edge semantics) + `TopoIndex` (cosine-LSH ANN over persistence signatures, with exact fallback + recall measure).
 - [x] **Phase 5** — Reproducible performance benchmark (`cookix eval --perf`): per-mode end-to-end latency/throughput on the synthetic corpus, plus per-query lookup memoisation in the ranking pass. *Next: the Rust hot-path core targeting this inner loop.*
-- [ ] **Phase 6** — Rust hot-path core via PyO3 for the geodesic/ranking loop; external multi-hop datasets (HotpotQA, 2WikiMultiHopQA, MuSiQue)
-- [ ] **v1.0** — Production release (gated on external benchmarks + the Rust core)
+**The road to a production `v1.0`** (full plan with exit gates in [ROADMAP.md](ROADMAP.md)):
+
+- [ ] **Phase 6** — *Credibility gate.* External-dataset validation: HotpotQA / 2WikiMultiHopQA / MuSiQue, ingestion pipeline, fair BM25 **and** dense-retriever baselines, EM/F1/recall/path metrics — an honest verdict on real data we didn't design.
+- [ ] **Phase 7** — *Performance gate.* Scale to 10⁵–10⁶ objects: wire `TopoIndex` into the engine, Rust hot-path core via PyO3 (Python-parity battery), large-corpus latency/throughput SLOs.
+- [ ] **Phase 8** — *Data-safety gate.* Crash-safe persistence (WAL + atomic snapshot), transactions, concurrent read/write, backup/restore — proven by crash-recovery and concurrency stress tests.
+- [ ] **Phase 9** — *Deployability gate.* Auth + rate limiting + input/resource limits, structured logging + metrics + health checks, hardened Docker image, security review.
+- [ ] **Phase 10** — *Distribution gate.* Frozen versioned API (OpenAPI) + SemVer policy, typed Python client, cross-platform wheels on PyPI, on-disk migration tooling.
+- [ ] **Phase 11 / v1.0** — Full docs, perf-regression CI, end-to-end smoke test. Released only when gates 6–10 all hold.
+
+Explicitly **out of scope for v1.0**: distributed clustering/sharding, a hosted service, and any claim that the 𝒯/𝒮 layers help retrieval before Phase 6 measures it.
 
 ---
 
