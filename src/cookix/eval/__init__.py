@@ -23,6 +23,16 @@ from .baselines import (
     Retrieved,
 )
 from .corpus import Corpus, EvalQuery, synthetic_corpus
+from .extraction import (
+    Annotated,
+    ExtractionReport,
+    ExtractionScore,
+    gold_extraction_corpus,
+    projected_multihop_accuracy,
+    run_extraction_study,
+    score_extractor,
+    to_markdown_extraction,
+)
 from .harness import (
     BenchmarkReport,
     RetrieverScore,
@@ -43,4 +53,12 @@ __all__ = [
     "RetrieverScore",
     "to_markdown",
     "to_json",
+    "Annotated",
+    "ExtractionScore",
+    "ExtractionReport",
+    "gold_extraction_corpus",
+    "score_extractor",
+    "run_extraction_study",
+    "projected_multihop_accuracy",
+    "to_markdown_extraction",
 ]

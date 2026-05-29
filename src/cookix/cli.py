@@ -50,6 +50,17 @@ def _cmd_serve(args: argparse.Namespace) -> int:
 
 
 def _cmd_eval(args: argparse.Namespace) -> int:
+    if args.extraction:
+        from .eval import run_extraction_study, to_markdown_extraction
+
+        extractors: dict[str, object] | None = None
+        if args.llm:
+            from .extraction.extractor import LLMExtractor, RuleBasedExtractor
+
+            extractors = {"rule-based": RuleBasedExtractor(), "llm": LLMExtractor()}
+        print(to_markdown_extraction(run_extraction_study(extractors)))
+        return 0
+
     from .eval import run_benchmark, to_json, to_markdown
 
     report = run_benchmark(seed=args.seed, n_worlds=args.worlds, k=args.k)
@@ -83,6 +94,10 @@ def main(argv: list[str] | None = None) -> int:
                     help="number of synthetic worlds, <=80 (default: 40)")
     ev.add_argument("--k", type=int, default=5, help="retrieval cutoff k (default: 5)")
     ev.add_argument("--json", action="store_true", help="emit JSON instead of Markdown")
+    ev.add_argument("--extraction", action="store_true",
+                    help="run the extraction-quality study instead of retrieval")
+    ev.add_argument("--llm", action="store_true",
+                    help="with --extraction, also score the LLM extractor (needs an API key)")
     ev.set_defaults(func=_cmd_eval)
 
     args = parser.parse_args(argv)

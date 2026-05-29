@@ -221,6 +221,41 @@ Reading the numbers honestly:
   why they remain *ablatable* and why honest external benchmarks are the next
   roadmap item. We are not claiming 𝒯/𝒮 help yet.
 
+### Extraction quality is the multi-hop ceiling
+
+The retrieval numbers above assume the graph is *already correct*. In practice the
+graph is built by an extractor, and **extraction error is the true ceiling on
+multi-hop reasoning**: if each edge is recovered with probability `p`, an `h`-hop
+answer is correct with probability about `pʰ` — error compounds with depth. We
+measure `p` directly against a hand-annotated gold corpus:
+
+```bash
+cookix eval --extraction           # deterministic rule-based study (offline)
+cookix eval --extraction --llm     # also score the LLM extractor (needs an API key)
+```
+
+Rule-based extractor on 16 gold-annotated sentences (18 gold triples):
+
+| extractor | precision | recall | f1 | relation_acc | gold | pred | exact |
+|---|---|---|---|---|---|---|---|
+| rule-based | 0.615 | 0.444 | 0.516 | 1.000 | 18 | 13 | 8 |
+
+The decomposition is the interesting part: **relation typing is perfectly reliable**
+(`relation_acc = 1.0` — whenever the extractor spans the right entities it labels the
+relation correctly), but **free-text coverage is the bottleneck** (`recall = 0.44`).
+The misses are exactly the realistic cases: out-of-vocabulary synonyms ("leads to",
+"ward off"), two-relation sentences (a keyword splitter emits only the first), and
+preposition boundaries. Projecting that per-edge recall through the compounding model:
+
+| extractor | 1-hop | 2-hop | 3-hop | 4-hop |
+|---|---|---|---|---|
+| rule-based | 0.444 | 0.198 | 0.088 | 0.039 |
+
+A 4-hop chain survives only ~4% of the time. That is **why extraction is a
+first-class, swappable component** and why the `LLMExtractor` exists — and it sets up
+Phase 2's open question: how much of that ceiling does an LLM extractor actually buy
+back? (The LLM run needs an API key, so it is kept out of the deterministic suite.)
+
 ---
 
 ## Use cases
@@ -238,7 +273,7 @@ Reading the numbers honestly:
 - [x] **Phase 0** — Optional topology + sheaf layers behind ablation switches
 - [x] **Phase 0** — HTTP server (`cookix serve`) + browser reasoning-path explorer UI
 - [x] **Phase 1** — Reproducible benchmark harness (`cookix eval`): synthetic relational corpus, fair vector-family + no-skill baselines, all ablations, deterministic from one seed. *Next: port to external multi-hop datasets.*
-- [ ] **Phase 2** — LLM relation extraction quality study (extraction error is the multi-hop ceiling)
+- [x] **Phase 2** — Extraction-quality study (`cookix eval --extraction`): gold-triple corpus, precision/recall/F1 + relation-typing accuracy, and the measured per-edge `pʰ` multi-hop ceiling. *Next: quantify how much an LLM extractor buys back.*
 - [ ] **Phase 3** — Learned sheaf restriction maps (neural sheaf diffusion)
 - [ ] **Phase 4** — Durable Kùzu backend hardening + TopoIndex (ANN over persistence diagrams)
 - [ ] **Phase 5** — Rust hot-path core via PyO3; optional server mode
