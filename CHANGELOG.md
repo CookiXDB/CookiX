@@ -6,6 +6,16 @@ All notable changes to CookiX are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.1.6] - 2026-05-29
+
+### Fixed
+- **Graph canvas no longer renders blank.** The vis-network container used
+  `height:100%`, which can resolve to 0 inside a CSS grid cell (so the canvas
+  painted into nothing while the results panel worked). The graph now fills its
+  wrapper via `position:absolute; inset:0`, with a `redraw()`/`fit()` nudge and an
+  "afterDrawing" overlay-hide. Graph rendering is also now best-effort: if the viz
+  library can't load, results/examples still work and a clear note is shown.
+
 ## [1.1.5] - 2026-05-29
 
 ### Changed

@@ -77,8 +77,10 @@
     .result .content { color: var(--muted); font-size: 12px; margin-top: 4px; font-style: italic; }
     .empty { color: var(--muted); font-size: 13px; line-height: 1.5; }
     .hint { font-size: 11px; color: var(--muted); margin: -6px 0 0; line-height: 1.4; }
-    #graphWrap { grid-area: graph; position: relative; }
-    #graph { height: 100%; }
+    #graphWrap { grid-area: graph; position: relative; overflow: hidden; }
+    /* Absolute fill so the canvas can never collapse to 0 height
+       (a bare height:100% can resolve to 0 inside a grid cell in some browsers). */
+    #graph { position: absolute; inset: 0; }
     .legend {
       position: absolute; bottom: 14px; left: 14px; background: rgba(36,27,20,.9);
       border: 1px solid var(--line); border-radius: 8px; padding: 9px 12px;
@@ -173,26 +175,36 @@
     }
 
     async function loadGraph() {
-      const g = await api("/api/graph");
-      baseEdgeColor = {};
-      allNodes = new vis.DataSet(g.nodes.map(nodeStyle));
-      allEdges = new vis.DataSet(g.edges.map(edgeStyle));
-      network = new vis.Network(document.getElementById("graph"),
-        { nodes: allNodes, edges: allEdges }, {
-          physics: { barnesHut: { gravitationalConstant: -6000, springLength: 140 }, stabilization: { iterations: 220 } },
-          interaction: { hover: true, tooltipDelay: 120 },
-        });
-      network.once("stabilizationIterationsDone", () => {
-        document.getElementById("overlay").style.display = "none";
-      });
+      const g = await api("/api/graph");        // data first — results need this even if viz fails
+      const overlay = document.getElementById("overlay");
+      try {
+        if (typeof vis === "undefined") throw new Error("visualisation library failed to load");
+        baseEdgeColor = {};
+        allNodes = new vis.DataSet(g.nodes.map(nodeStyle));
+        allEdges = new vis.DataSet(g.edges.map(edgeStyle));
+        network = new vis.Network(document.getElementById("graph"),
+          { nodes: allNodes, edges: allEdges }, {
+            physics: { barnesHut: { gravitationalConstant: -6000, springLength: 140 }, stabilization: { iterations: 220 } },
+            interaction: { hover: true, tooltipDelay: 120 },
+          });
+        const hide = () => { overlay.style.display = "none"; };
+        network.once("stabilizationIterationsDone", hide);
+        network.once("afterDrawing", hide);   // belt-and-suspenders: hide once anything paints
+        setTimeout(() => { network.redraw(); network.fit(); hide(); }, 300);
+      } catch (e) {
+        network = null;
+        overlay.textContent = "Graph view unavailable: " + e.message + " (results still work).";
+      }
       return g;
     }
 
     function resetHighlight() {
+      if (!network) return;
       allNodes.forEach(n => allNodes.update({ id: n.id, color: { ...n.color, background: n.dangling ? "#2e2418" : "#4a3b2c", border: "#8a6f52" } }));
       allEdges.forEach(e => allEdges.update({ id: e.id, color: { color: REL_COLOR, highlight: "#ff7a45" }, width: 1.5 }));
     }
     function highlightPath(path) {
+      if (!network) return;
       resetHighlight();
       const nodeIds = new Set();
       path.forEach(s => { nodeIds.add(s.source); nodeIds.add(s.target); });
