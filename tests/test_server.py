@@ -3,8 +3,9 @@ from __future__ import annotations
 import pytest
 
 # The server is an optional extra (`cookix[server]`). Skip the whole module if
-# FastAPI / its test client are not installed.
+# FastAPI or the httpx-backed test client are not installed.
 pytest.importorskip("fastapi")
+pytest.importorskip("httpx")
 from fastapi.testclient import TestClient  # noqa: E402
 
 from cookix.demos import umbrella_db  # noqa: E402
