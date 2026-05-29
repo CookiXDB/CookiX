@@ -541,7 +541,7 @@ Explicitly **out of scope for v1.0**: distributed clustering/sharding, a hosted 
 
 - [~] **Phase 12** — CI **wired**: a `Docker` workflow builds → runs → smoke-tests `/healthz` → Trivy-scans → pushes to GHCR on tags, and a `Release` workflow builds + verifies the wheel in a clean venv + publishes to PyPI via OIDC trusted publishing. *Gate confirms on the first tagged run after a maintainer configures the PyPI trusted publisher (see [RELEASING.md](RELEASING.md)).*
 - [~] **Phase 13** — Load/soak harness **shipped** (`cookix loadtest`): real server + concurrent clients, throughput/tail-latency/error-rate + memory sampling for leak detection. First run: **0 errors**, p99 ~100 ms, no leak. *Remaining: a multi-hour soak and a 1M-object run on real hardware.*
-- [ ] **Phase 14** — Group-commit + finer-grained concurrency; read replicas.
+- [~] **Phase 14** — WAL **group-commit** shipped (`group_commit=` toggle, correctness-tested). Honest finding: only ~3% here — the **single-writer lock + GIL**, not fsync, is the write bottleneck; real write-scaling needs finer-grained locking + multi-process serving. (Read replicas moved to Phase 17.)
 - [ ] **Phase 15** — Rust/PyO3 hot-path core (the deferred 1.0 item).
 - [ ] **Phase 16** — Public-facing/multi-tenant hardening (TLS, roles, namespaces, distributed rate limiting, tracing).
 - [ ] **Phase 17** — Distributed / HA: replication, failover, PITR backups.

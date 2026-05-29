@@ -7,6 +7,11 @@ All notable changes to CookiX are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- **WAL group-commit (Phase 14)** — concurrent writers share a single `fsync`
+  instead of one apiece (`DurableBackend(..., group_commit=True)`, default on),
+  correctness preserved in both modes. Measured ~3% here (the global write lock
+  and GIL, not fsync, are the bottleneck on a cached filesystem); the payoff is
+  larger on fsync-bound disks.
 - **Load & soak harness (Phase 13)** — `cookix loadtest` (`cookix.eval.load`)
   starts the real HTTP server and drives it with N concurrent clients over real
   sockets, reporting throughput, p50/p95/p99 latency, error rate, and

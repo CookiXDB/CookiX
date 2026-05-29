@@ -44,11 +44,24 @@ class WriteAheadLog:
         payload = pickle.dumps(record, protocol=pickle.HIGHEST_PROTOCOL)
         return _LEN.pack(len(payload)) + payload + _CRC.pack(zlib.crc32(payload))
 
-    def append(self, record: Any) -> None:
-        """Append one record and flush it to stable storage before returning."""
+    def append_nosync(self, record: Any) -> None:
+        """Write one record to the OS buffer **without** an fsync.
+
+        The bytes are handed to the kernel but not yet guaranteed durable; a
+        later :meth:`sync` makes every preceding ``append_nosync`` durable in one
+        barrier. This is the primitive group-commit batches many writers onto.
+        """
         self._fh.write(self._frame(record))
         self._fh.flush()
+
+    def sync(self) -> None:
+        """Force everything written so far to stable storage (one fsync)."""
         os.fsync(self._fh.fileno())
+
+    def append(self, record: Any) -> None:
+        """Append one record and flush it to stable storage before returning."""
+        self.append_nosync(record)
+        self.sync()
 
     def append_batch(self, records: list[Any]) -> None:
         """Append many records with a *single* fsync — the atomic-commit path.

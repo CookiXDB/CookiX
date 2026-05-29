@@ -44,7 +44,9 @@ SNAPSHOT_FORMAT_VERSION = 1
 class DurableBackend(StorageBackend):
     """In-memory speed with on-disk durability, atomic batches and locking."""
 
-    def __init__(self, path: str | Path, *, autosnapshot_ops: int = 1000) -> None:
+    def __init__(
+        self, path: str | Path, *, autosnapshot_ops: int = 1000, group_commit: bool = True
+    ) -> None:
         self.dir = Path(path)
         self.dir.mkdir(parents=True, exist_ok=True)
         self._snap_path = self.dir / "snapshot.pkl"
@@ -55,6 +57,16 @@ class DurableBackend(StorageBackend):
         self._ops_since_snapshot = 0
         self._in_txn = False
         self._txn_buffer: list[dict] = []
+
+        # Group commit: concurrent writers each write their record under the main
+        # lock (so the log stays ordered), then share a single fsync instead of
+        # paying one fsync apiece. ``_write_seq`` counts ordered writes;
+        # ``_synced_seq`` is the highest seq known durable. A writer is only
+        # acknowledged once a sync has covered its seq.
+        self.group_commit = group_commit
+        self._write_seq = 0
+        self._synced_seq = 0
+        self._fsync_lock = threading.Lock()
 
         self._recover()
         self._wal = WriteAheadLog(self._wal_path)
@@ -95,15 +107,48 @@ class DurableBackend(StorageBackend):
     # ------------------------------------------------------------------ #
     # Mutations (durable)
     # ------------------------------------------------------------------ #
+    def _group_commit(self, seq: int) -> None:
+        """Ensure write ``seq`` is durable, sharing one fsync across writers.
+
+        If another writer already synced past ``seq`` our bytes are durable and we
+        return immediately; otherwise we take the fsync lock and sync everything
+        written so far (>= ``seq``), covering every concurrent writer at once.
+        """
+        if self._synced_seq >= seq:
+            return
+        with self._fsync_lock:
+            if self._synced_seq >= seq:
+                return
+            target = self._write_seq  # everything written up to now
+            self._wal.sync()
+            self._synced_seq = max(self._synced_seq, target)
+
+    def _durable_write(self, record: dict) -> None:
+        """Apply + persist a single record, via group commit when enabled."""
+        if self.group_commit:
+            with self._lock:
+                self._wal.append_nosync(record)
+                self._apply(record)
+                self._write_seq += 1
+                seq = self._write_seq
+            self._group_commit(seq)  # fsync outside the main lock
+            with self._lock:
+                self._maybe_snapshot()
+        else:
+            with self._lock:
+                self._wal.append(record)
+                self._apply(record)
+                self._write_seq += 1
+                self._synced_seq = self._write_seq
+                self._maybe_snapshot()
+
     def put(self, obj: KnowledgeObject) -> None:
         record = {"op": "put", "obj": obj}
         with self._lock:
             if self._in_txn:
                 self._txn_buffer.append(record)
                 return
-            self._wal.append(record)
-            self._apply(record)
-            self._maybe_snapshot()
+        self._durable_write(record)
 
     def delete(self, obj_id: str) -> bool:
         with self._lock:
@@ -116,10 +161,8 @@ class DurableBackend(StorageBackend):
                 return exists
             if obj_id not in self._mem:
                 return False
-            self._wal.append({"op": "delete", "id": obj_id})
-            self._mem.delete(obj_id)
-            self._maybe_snapshot()
-            return True
+        self._durable_write({"op": "delete", "id": obj_id})
+        return True
 
     # ------------------------------------------------------------------ #
     # Transactions (atomic write batch)
@@ -157,6 +200,9 @@ class DurableBackend(StorageBackend):
                 self._wal.append_batch(batch)  # one fsync: all-or-nothing
                 for record in batch:
                     self._apply(record)
+                # The batch is durable; advance both counters together.
+                self._write_seq += len(batch)
+                self._synced_seq = self._write_seq
                 self._ops_since_snapshot += len(batch)
                 self._maybe_snapshot()
         finally:
@@ -179,7 +225,10 @@ class DurableBackend(StorageBackend):
         """Fold the WAL into an atomic on-disk snapshot, then clear the WAL."""
         with self._lock:
             self._atomic_write_snapshot(self._snap_path)
-            self._wal.truncate()
+            # Hold the fsync lock while truncating so we never close/reopen the
+            # WAL file out from under a concurrent group-commit ``sync()``.
+            with self._fsync_lock:
+                self._wal.truncate()
             self._ops_since_snapshot = 0
 
     def _atomic_write_snapshot(self, dest: Path) -> None:

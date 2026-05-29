@@ -142,6 +142,39 @@ def test_backup_restore_round_trip_is_equivalent(tmp_path):
 
 
 # --------------------------------------------------------------------------- #
+# Group commit (Phase 14): correctness must hold in both modes
+# --------------------------------------------------------------------------- #
+@pytest.mark.parametrize("group_commit", [True, False])
+def test_group_commit_modes_are_durable(tmp_path, group_commit):
+    db_dir = tmp_path / f"db_{group_commit}"
+    b = DurableBackend(db_dir, autosnapshot_ops=10_000, group_commit=group_commit)
+    for i in range(100):
+        b.put(_obj(f"n{i}"))
+    assert len(b) == 100
+    # Crash (drop the WAL handle) and recover: every write must survive.
+    b._wal.close()
+    assert len(DurableBackend(db_dir)) == 100
+
+
+def test_group_commit_concurrent_writers_lose_nothing(tmp_path):
+    store = DurableBackend(tmp_path / "db", autosnapshot_ops=10_000, group_commit=True)
+    n_threads, per = 8, 60
+
+    def worker(t: int) -> None:
+        for i in range(per):
+            store.put(_obj(f"t{t}_{i}"))
+
+    threads = [threading.Thread(target=worker, args=(t,)) for t in range(n_threads)]
+    for th in threads:
+        th.start()
+    for th in threads:
+        th.join()
+    assert len(store) == n_threads * per
+    store.close()
+    assert len(DurableBackend(tmp_path / "db")) == n_threads * per
+
+
+# --------------------------------------------------------------------------- #
 # On-disk format versioning (migration guard)
 # --------------------------------------------------------------------------- #
 def test_snapshot_is_versioned_and_legacy_is_still_readable(tmp_path):

@@ -302,13 +302,25 @@ it is buildable; that last one is lived.
 - **Exit gate:** documented "sustained *X* req/s for *Y* hours, flat memory, zero
   data loss across induced crashes," reproducible from the shipped harness.
 
-## Phase 14 — Concurrency & write throughput *(beyond single-writer)*
+## Phase 14 — Concurrency & write throughput *(beyond single-writer)* — ◐ MEASURED
 
-- The durable backend is single-writer (one global lock). Add **group-commit**
-  (batch WAL fsyncs), finer-grained locking or MVCC, and async server workers.
-- Read-only **follower replicas** built from snapshot + WAL tail.
-- **Exit gate:** measured write-throughput gain over the 1.0 baseline; documented
-  concurrent read/write SLOs under the Phase 13 load harness.
+- **Done:** **WAL group-commit** — concurrent writers write their record under
+  the (ordered) write lock, then share a single `fsync` instead of paying one
+  apiece; selectable via `DurableBackend(..., group_commit=True)` (default).
+  Correctness holds in both modes (crash-recovery + 8-writer concurrency tests).
+- **Honest finding (the important part):** on this machine group-commit moved
+  write throughput only **~3% (902 → 933 writes/s, 8 threads)**. The reason is
+  diagnostic: the **global write lock + the GIL serialise writers**, so few
+  fsyncs actually batch, and on a cached filesystem `fsync` is already cheap. The
+  real bottleneck is the **single-writer lock, not fsync count**. (On an
+  `fsync`-bound disk — networked/EBS-style — the batching pays off far more; the
+  optimization is correct and standard, its payoff is workload-dependent.)
+- **Remaining (the real write-scaling work):** shrink the critical section /
+  finer-grained locking or MVCC, and **multi-process** serving (`uvicorn
+  --workers N`) to get past the GIL. **Read-only follower replicas** moved to
+  Phase 17 (Distributed/HA), where replication belongs.
+- **Exit gate:** a documented write-throughput gain on an `fsync`-bound disk, and
+  concurrent read/write SLOs under the Phase 13 harness.
 
 ## Phase 15 — Rust hot-path core *(the deferred 1.0 item)*
 
@@ -331,6 +343,8 @@ it is buildable; that last one is lived.
 
 - Replication (primary + replicas) with failover; optional sharding by
   key/namespace; automated backups with point-in-time recovery.
+- **Read-only follower replicas** built from snapshot + WAL tail (moved here from
+  Phase 14 — this is where replication naturally lives).
 - **Exit gate:** survives a node loss with no data loss; horizontal **read**
   scaling demonstrated under load.
 
