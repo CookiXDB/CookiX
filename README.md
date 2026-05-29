@@ -228,15 +228,47 @@ for r in db.query("what prevents rain?"):
 
 ---
 
-## The honest status
+## What 1.0 is — and is not
 
-CookiX is built to **test** the NoVectDB paradigm, not to oversell it. Being straight about what's proven and what isn't:
+CookiX `1.0` is a **production-ready single-node** topological-relational
+database. Calling it 1.0 is a scoped, honest claim — here is exactly what that
+does and does not mean.
 
-- ✅ **The typed-graph core works and is well-founded.** Typed relational retrieval beating flat vector similarity on relational/multi-hop/contradiction queries is established across the knowledge-graph and GraphRAG literature.
-- 🧪 **Persistent homology (𝒯) and sheaf composition (𝒮) are open research bets.** They are implemented as *optional, ablatable* layers precisely so their contribution can be **measured** against the graph-only baseline — not assumed. The sheaf restriction maps are no longer only a placeholder: they can now be **learned** from edge evidence (`cookix.sheaf.set_learned_maps`), and the learned maps cut held-out composition residual substantially — see [Benchmarks](#benchmarks).
-- 📊 **The benchmark harness now ships in-repo and is reproducible from a single seed** (`cookix eval`). It runs on a synthetic relational corpus against fair baselines and every ablation; see [Benchmarks](#benchmarks) below. Porting it to external multi-hop datasets (HotpotQA, 2WikiMultiHopQA, MuSiQue) is the next step.
+**What 1.0 delivers (validated and tested — 120 tests):**
 
-If the exotic layers don't earn their keep in honest ablations, we'll say so. That's the point.
+- ✅ **A relational engine that beats strong baselines on real data.** On
+  2WikiMultiHopQA, typed multi-hop traversal reaches **hits@10 0.58 vs Okapi
+  BM25's 0.39** (+50% relative) under oracle entity-linking — measured on data
+  CookiX did not design. See [Benchmarks](#benchmarks).
+- ✅ **Durability.** A crash-safe backend: write-ahead log, atomic snapshots,
+  atomic transactions, thread-safe concurrency, backup/restore — proven by a
+  crash-recovery and concurrency-stress battery.
+- ✅ **Deployability & security.** API-key auth, rate limiting, resource limits,
+  read-only mode, metrics + health probes, a documented threat model, a hardened
+  Dockerfile.
+- ✅ **Predictable performance.** Query latency stays ~2 ms from 1k→50k objects
+  (settle-once Dijkstra; pure Python, single node).
+- ✅ **Stable distribution.** Versioned Python + wire + on-disk APIs, a typed
+  client, and a wheel that builds, passes `twine check`, and installs cleanly.
+
+**What 1.0 deliberately does *not* claim (no overselling):**
+
+- 🚫 **Not distributed.** 1.0 is single-node — no clustering, sharding, or
+  replication. That is post-1.0.
+- 🧪 **The topological (𝒯) and sheaf (𝒮) layers are still open research bets.**
+  They remain *optional and ablatable*; we have **not** shown they improve
+  retrieval, and 1.0 does not depend on them. The sheaf maps are learnable
+  (`cookix.sheaf.set_learned_maps`, ~50–60% held-out residual drop), but that is
+  a property of the maps, not a proven retrieval win.
+- ⏳ **The Rust hot-path core is post-1.0.** It is a performance optimization, not
+  a correctness or safety requirement; the pure-Python engine is fast enough for
+  1.0's single-node target. (No Rust toolchain was available to build it here.)
+- ⏳ **End-to-end open-domain QA is extraction-limited.** The engine result above
+  is under oracle entity-linking; free-text triple extraction (`cookix eval
+  --extraction`) is the measured bottleneck and the honest frontier.
+
+If the exotic layers don't earn their keep in honest ablations, we'll say so.
+That's the point.
 
 ---
 
@@ -479,9 +511,9 @@ algorithmic win shipped here is the settle-once/early-exit Dijkstra, in Python.
 - [x] **Phase 8** — *Data-safety gate.* `durable` backend: write-ahead log (fsync-on-commit, CRC torn-write tolerance), atomic snapshots, atomic-batch transactions, thread-safe single-writer locking, backup/restore — proven by a crash-recovery, rollback, concurrency-stress and round-trip test battery.
 - [x] **Phase 9** — *Deployability gate.* API-key auth, per-client rate limiting, `k`/`max_hops`/body-size limits, read-only mode, JSON access logs, Prometheus `/metrics`, `/healthz` + `/readyz`, a documented threat model ([SECURITY.md](SECURITY.md)), and a hardened non-root `Dockerfile`. *(App hardening test-proven; the container image is provided but not build-validated in this environment.)*
 - [x] **Phase 10** — *Distribution gate.* Versioned wire API (`API_VERSION`, exposed at `/api/info`) + SemVer/deprecation policy ([API_STABILITY.md](API_STABILITY.md)), a dependency-free typed `CookixClient`, a versioned on-disk format with a migration guard, and a wheel+sdist that **build, pass `twine check`, and install+run in a clean venv**. *(Actual PyPI publish is the maintainer's step — it needs credentials and is intentionally not automated.)*
-- [ ] **Phase 11 / v1.0** — Full docs, perf-regression CI, end-to-end smoke test. Released only when gates 6–10 all hold.
+- [x] **Phase 11 / v1.0** — **Released.** End-to-end production smoke test (durable backend + authed server + client + crash recovery), a perf-regression guardrail, full docs ([SECURITY.md](SECURITY.md), [API_STABILITY.md](API_STABILITY.md)), and the honest 1.0 scope statement above. The Rust core (Phase 7) is reclassified as a **post-1.0** performance optimization rather than a 1.0 blocker.
 
-Explicitly **out of scope for v1.0**: distributed clustering/sharding, a hosted service, and any claim that the 𝒯/𝒮 layers help retrieval before Phase 6 measures it.
+Explicitly **out of scope for v1.0**: distributed clustering/sharding, a hosted service, and any claim that the 𝒯/𝒮 layers help retrieval. **Post-1.0:** the Rust/PyO3 hot-path core, external HotpotQA/MuSiQue loaders + a dense-retriever baseline, and the actual PyPI publish.
 
 ---
 

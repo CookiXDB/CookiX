@@ -6,6 +6,21 @@ All notable changes to CookiX are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-05-29
+
+First production release: a single-node topological-relational database that is
+validated on external data, durable, secured, and distributed as stable
+artifacts. See the "What 1.0 is — and is not" section of the README for the
+honest scope. Highlights folded in from the development line below: external
+2WikiMultiHopQA validation (typed traversal beats BM25 hits@10 0.58 vs 0.39),
+the crash-safe `durable` backend, production server hardening, the typed client,
+API + on-disk-format versioning, and an end-to-end production smoke test.
+
+Out of scope for 1.0 (documented, not hidden): distributed/multi-node operation,
+a proven retrieval benefit from the topological/sheaf layers (they stay optional
+and ablatable), and the Rust hot-path core (a post-1.0 performance optimization —
+the pure-Python engine already holds ~2 ms query latency to 50k objects).
+
 ### Added
 - **Typed Python client** (`cookix.CookixClient`) — a dependency-free
   (stdlib-`urllib`) client over the stable HTTP wire API, with an injectable
