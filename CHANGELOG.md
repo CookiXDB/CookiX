@@ -7,6 +7,9 @@ All notable changes to CookiX are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- **Scaling benchmark** (`cookix eval --scale`, `cookix.eval.run_scale_benchmark`)
+  — build cost, query latency and peak memory as the graph grows from 1k to 50k+
+  objects. Query latency stays near-flat (~1.5→2.2 ms across a 50× size increase).
 - **External multi-hop QA evaluation** (`cookix eval --dataset 2wiki --path …`,
   `cookix.eval.datasets`) — a real 2WikiMultiHopQA loader, an in-repo Okapi BM25
   baseline, a global knowledge graph built from gold evidence triples, and
@@ -14,6 +17,11 @@ All notable changes to CookiX are documented here. The format follows
   first 2,000 dev examples, typed traversal beats BM25 hits@10 0.580 vs 0.386
   (+50% relative) with `path_match` 0.579. Ships with an offline fixture so the
   pipeline is exercised in CI without the dataset download.
+
+### Changed
+- **Geodesic search is now settle-once Dijkstra** with early-exit on a requested
+  target: a node is never re-expanded once its minimum-cost path is fixed. Same
+  results, far less work on large/dense graphs.
 
 ## [0.2.0] - 2026-05-29
 

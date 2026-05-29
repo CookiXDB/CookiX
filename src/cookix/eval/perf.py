@@ -17,7 +17,9 @@ into the numbers.
 
 from __future__ import annotations
 
+import random
 import time
+import tracemalloc
 from dataclasses import dataclass
 from statistics import median
 
@@ -25,6 +27,9 @@ from .. import connect
 from .corpus import synthetic_corpus
 
 DEFAULT_MODES = ("graph", "topo", "sheaf", "reasoning")
+
+# A small typed-relation vocabulary for the scale graph generator.
+_SCALE_RELATIONS = ("causes", "prevents", "part_of", "similar_to", "depends_on")
 
 
 @dataclass
@@ -138,5 +143,125 @@ def to_markdown_perf(report: PerfReport) -> str:
         "Timings are wall-clock on the measuring machine and vary with hardware "
         "and load; only the relative cost of each mode is portable. The workload "
         "(corpus + queries) is fixed by `seed`."
+    )
+    return "\n".join(lines)
+
+
+# --------------------------------------------------------------------------- #
+# Scaling benchmark: how do build cost, query latency and memory grow with N?
+# --------------------------------------------------------------------------- #
+@dataclass
+class ScaleRow:
+    n_objects: int
+    avg_degree: int
+    ingest_ms: float
+    peak_mb: float
+    query_median_ms: float
+    query_p95_ms: float
+    qps: float
+
+
+@dataclass
+class ScaleReport:
+    seed: int
+    avg_degree: int
+    max_hops: int
+    n_queries: int
+    rows: list[ScaleRow]
+
+
+def _scale_graph(n_objects: int, avg_degree: int, seed: int) -> list[dict]:
+    """A deterministic random typed graph: ``n_objects`` nodes, ``avg_degree``
+    outgoing typed edges each, drawn from a small relation vocabulary.
+
+    This is a structural stress workload, not a semantic corpus — its job is to
+    exercise the geodesic traversal hot path on a graph far larger and denser
+    than the synthetic benchmark, so we can read how latency scales with N.
+    """
+    rng = random.Random(seed)
+    docs: list[dict] = []
+    for i in range(n_objects):
+        edges = []
+        for _ in range(avg_degree):
+            tgt = rng.randrange(n_objects)
+            if tgt != i:
+                edges.append((rng.choice(_SCALE_RELATIONS), f"n{tgt}"))
+        docs.append({"_id": f"n{i}", "content": f"node {i}", "edges": edges})
+    return docs
+
+
+def run_scale_benchmark(
+    sizes: tuple[int, ...] = (1_000, 5_000, 20_000),
+    avg_degree: int = 4,
+    seed: int = 0,
+    n_queries: int = 200,
+    max_hops: int = 4,
+) -> ScaleReport:
+    """Characterise build cost, query latency and peak memory as the graph grows.
+
+    For each size: build the graph (timed, with ``tracemalloc`` peak captured),
+    then run ``n_queries`` anchor-only traversals from random nodes — the heavy
+    case that explores the reachable neighbourhood — and report latency/throughput.
+    """
+    rng = random.Random(seed)
+    rows: list[ScaleRow] = []
+    for n in sizes:
+        docs = _scale_graph(n, avg_degree, seed)
+
+        tracemalloc.start()
+        start = time.perf_counter()
+        db = connect(f"scale-{n}")
+        db.insert_many(docs)
+        ingest_ms = (time.perf_counter() - start) * 1000.0
+        peak_mb = tracemalloc.get_traced_memory()[1] / (1024 * 1024)
+        tracemalloc.stop()
+
+        anchors = [f"n{rng.randrange(n)}" for _ in range(n_queries)]
+        # Warm up.
+        for a in anchors[:10]:
+            db.query(anchor=a, k=5, mode="graph", max_hops=max_hops)
+
+        samples: list[float] = []
+        for a in anchors:
+            t = time.perf_counter()
+            db.query(anchor=a, k=5, mode="graph", max_hops=max_hops)
+            samples.append((time.perf_counter() - t) * 1000.0)
+
+        total_s = sum(samples) / 1000.0
+        rows.append(ScaleRow(
+            n_objects=n,
+            avg_degree=avg_degree,
+            ingest_ms=ingest_ms,
+            peak_mb=peak_mb,
+            query_median_ms=median(samples),
+            query_p95_ms=_percentile(samples, 95.0),
+            qps=(len(samples) / total_s) if total_s > 0 else float("inf"),
+        ))
+    return ScaleReport(
+        seed=seed, avg_degree=avg_degree, max_hops=max_hops,
+        n_queries=n_queries, rows=rows,
+    )
+
+
+def to_markdown_scale(report: ScaleReport) -> str:
+    lines = [
+        "### Scaling: in-memory backend",
+        "",
+        f"avg out-degree {report.avg_degree} · max_hops {report.max_hops} · "
+        f"{report.n_queries} anchor-only traversals per size · seed {report.seed}",
+        "",
+        "| objects | ingest ms | peak MB | median ms | p95 ms | queries/s |",
+        "|---|---|---|---|---|---|",
+    ]
+    for r in report.rows:
+        lines.append(
+            f"| {r.n_objects:,} | {r.ingest_ms:.0f} | {r.peak_mb:.1f} "
+            f"| {r.query_median_ms:.3f} | {r.query_p95_ms:.3f} | {r.qps:.0f} |"
+        )
+    lines.append("")
+    lines.append(
+        "Anchor-only traversal explores the reachable neighbourhood within "
+        "`max_hops`; settle-once Dijkstra keeps this near-linear in the explored "
+        "frontier rather than re-expanding nodes. Timings are machine-dependent."
     )
     return "\n".join(lines)

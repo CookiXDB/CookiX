@@ -48,7 +48,16 @@ from .harness import (
     RetrieverScore,
     run_benchmark,
 )
-from .perf import PerfReport, PerfRow, run_perf_benchmark, to_markdown_perf
+from .perf import (
+    PerfReport,
+    PerfRow,
+    ScaleReport,
+    ScaleRow,
+    run_perf_benchmark,
+    run_scale_benchmark,
+    to_markdown_perf,
+    to_markdown_scale,
+)
 from .report import to_json, to_markdown
 from .sheaf_study import SheafAblation, run_sheaf_ablation, to_markdown_sheaf
 
@@ -80,6 +89,10 @@ __all__ = [
     "PerfRow",
     "run_perf_benchmark",
     "to_markdown_perf",
+    "ScaleReport",
+    "ScaleRow",
+    "run_scale_benchmark",
+    "to_markdown_scale",
     "BM25Retriever",
     "RelExample",
     "RelationalDataset",

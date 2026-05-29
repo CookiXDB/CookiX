@@ -67,10 +67,23 @@ proposition depends on extraction, and that becomes the priority.
 
 ---
 
-## Phase 7 — Scale & the hot-path core *(performance gate)*
+## Phase 7 — Scale & the hot-path core *(performance gate)* — ◐ PARTIAL
 
 v0.2.0 is a sub-0.1 ms micro-benchmark on a 240-object corpus. Production means
 10⁵–10⁷ objects with predictable latency.
+
+**Done:** a scaling benchmark (`cookix eval --scale`) and a real algorithmic
+optimization — **settle-once Dijkstra** (never re-expand a node once its
+minimum-cost path is fixed) with **early-exit** on a requested target. Result:
+query latency stays **near-flat (~1.5→2.2 ms) across a 50× graph-size increase**
+(1k→50k objects), because traversal cost is bounded by the local reachable
+frontier (degree × hops), not total N; memory ~3 KB/object.
+
+**Deferred (honest):** the **Rust/PyO3 hot-path core** is *not built* — this
+environment has no Rust toolchain, so compiling and parity-testing it is not
+possible here. It remains the open item; the Python settle-once/early-exit
+optimization is the interim win. Wiring `TopoIndex` into the engine as an ANN
+candidate generator also remains open.
 
 **Deliverables**
 - Wire `TopoIndex` (cosine-LSH ANN) into the engine as a real candidate

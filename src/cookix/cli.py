@@ -70,6 +70,12 @@ def _cmd_eval(args: argparse.Namespace) -> int:
         ))
         return 0
 
+    if args.scale:
+        from .eval import run_scale_benchmark, to_markdown_scale
+
+        print(to_markdown_scale(run_scale_benchmark(seed=args.seed)))
+        return 0
+
     if args.sheaf:
         from .eval import run_sheaf_ablation, to_markdown_sheaf
 
@@ -128,6 +134,8 @@ def main(argv: list[str] | None = None) -> int:
                     help="run the learned-sheaf residual ablation instead of retrieval")
     ev.add_argument("--perf", action="store_true",
                     help="time the query engine per ablation mode instead of scoring")
+    ev.add_argument("--scale", action="store_true",
+                    help="benchmark build/latency/memory as the graph grows")
     ev.add_argument("--dataset", choices=["2wiki"],
                     help="evaluate on an external multi-hop QA dataset vs BM25")
     ev.add_argument("--path", help="path to the dataset JSON (with --dataset)")

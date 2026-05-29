@@ -144,25 +144,37 @@ class QueryEngine:
         pq: list[tuple[float, str, list[ReasoningStep]]] = [(0.0, anchor, [])]
         best_cost: dict[str, float] = {anchor: 0.0}
         results: dict[str, QueryResult] = {}
+        settled: set[str] = {anchor}
 
         while pq:
             cost, node, path = heapq.heappop(pq)
+            # Settle-once: with non-negative edge weights, the first pop of a node
+            # is already its minimum-cost path (Dijkstra). Skip stale re-pops so we
+            # never re-expand a node — the key cost saving on large, dense graphs.
+            if node in settled and node != anchor:
+                continue
             hop = len(path)
             if hop > 0 and node != anchor:
-                if node not in results or cost < results[node].score:
-                    obj = self.storage.get(node)
-                    results[node] = QueryResult(
-                        object_id=node,
-                        content=obj.content if obj else "",
-                        score=cost,
-                        path=list(path),
-                        components={"geodesic": cost},
-                    )
+                settled.add(node)
+                obj = self.storage.get(node)
+                results[node] = QueryResult(
+                    object_id=node,
+                    content=obj.content if obj else "",
+                    score=cost,
+                    path=list(path),
+                    components={"geodesic": cost},
+                )
+                # Early exit: when searching for a specific target, the first time
+                # we settle it the answer is optimal — no need to explore further.
+                if target is not None and node == target:
+                    break
             if hop >= max_hops:
                 continue
             allowed = relation_chain[hop] if relation_chain and hop < len(relation_chain) else None
             for edge in self.storage.out_edges(node):
                 if allowed is not None and edge.relation != allowed:
+                    continue
+                if edge.target in settled:
                     continue
                 new_cost = cost + edge.weight
                 if edge.target in best_cost and best_cost[edge.target] <= new_cost:

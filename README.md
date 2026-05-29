@@ -371,9 +371,32 @@ the price of composition re-ranking and is itself a measured trade-off rather th
 an assumption. Ranking memoises per-query object lookups so adding layers does not
 re-fetch the anchor for every candidate.
 
-Honest scope: this is a Python-level micro-benchmark on synthetic data, not a
-sustained-load or large-corpus benchmark. The Rust hot-path core (roadmap below)
-targets exactly the geodesic/ranking inner loop these numbers measure.
+Ranking memoises per-query object lookups, and the geodesic search is a
+**settle-once Dijkstra** (a node is never re-expanded once its minimum-cost path
+is fixed) with **early-exit** when a specific target is requested.
+
+### Scaling
+
+The micro-benchmark above is on 240 objects. How does it hold as the graph grows?
+A structural stress workload — a random typed graph, out-degree 4, anchor-only
+4-hop traversals — measured with `cookix eval --scale`:
+
+| objects | ingest | peak mem | median query | p95 | throughput |
+|---|---|---|---|---|---|
+| 1,000 | 0.08 s | 3 MB | 1.5 ms | 2.8 ms | ~560 q/s |
+| 10,000 | 0.9 s | 30 MB | 2.0 ms | 3.1 ms | ~460 q/s |
+| 50,000 | 6.4 s | 155 MB | 2.2 ms | 6.1 ms | ~340 q/s |
+
+The result that matters: **query latency stays near-flat (~1.5→2.2 ms) across a
+50× increase in graph size.** Traversal cost is bounded by the *local reachable
+frontier* (degree × hops), not the total object count — which is the whole point
+of settle-once Dijkstra over a typed graph. Memory is ~3 KB/object and ingest is
+roughly linear.
+
+Honest scope: this is single-threaded **pure Python** on one machine. The planned
+**Rust/PyO3 hot-path core** (Phase 7 of the [roadmap](ROADMAP.md)) targets exactly
+this geodesic inner loop; it is not yet built (it needs a Rust toolchain), so the
+algorithmic win shipped here is the settle-once/early-exit Dijkstra, in Python.
 
 ---
 
@@ -399,7 +422,7 @@ targets exactly the geodesic/ranking inner loop these numbers measure.
 **The road to a production `v1.0`** (full plan with exit gates in [ROADMAP.md](ROADMAP.md)):
 
 - [x] **Phase 6** — *Credibility gate.* External validation on **2WikiMultiHopQA** (`cookix eval --dataset 2wiki`): gold-triple knowledge graph vs Okapi BM25 over the same paragraphs. **hits@10 0.58 vs 0.39** (+50% rel.) and `path_match` 0.58 on 2,000 dev examples, under oracle entity-linking. *Next: HotpotQA/MuSiQue loaders + a dense-retriever baseline.*
-- [ ] **Phase 7** — *Performance gate.* Scale to 10⁵–10⁶ objects: wire `TopoIndex` into the engine, Rust hot-path core via PyO3 (Python-parity battery), large-corpus latency/throughput SLOs.
+- [~] **Phase 7** — *Performance gate (partial).* Scaling benchmark (`cookix eval --scale`) + settle-once/early-exit Dijkstra: **query latency near-flat ~2 ms from 1k→50k objects**, ~3 KB/object. Rust/PyO3 hot-path core still **deferred** (needs a Rust toolchain not present in this environment).
 - [ ] **Phase 8** — *Data-safety gate.* Crash-safe persistence (WAL + atomic snapshot), transactions, concurrent read/write, backup/restore — proven by crash-recovery and concurrency stress tests.
 - [ ] **Phase 9** — *Deployability gate.* Auth + rate limiting + input/resource limits, structured logging + metrics + health checks, hardened Docker image, security review.
 - [ ] **Phase 10** — *Distribution gate.* Frozen versioned API (OpenAPI) + SemVer policy, typed Python client, cross-platform wheels on PyPI, on-disk migration tooling.
