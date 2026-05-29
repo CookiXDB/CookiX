@@ -51,18 +51,16 @@ jobs:
           docker rm -f cookix
 
       - name: Scan image for vulnerabilities (Trivy)
-        uses: aquasecurity/trivy-action@0.28.0
-        with:
-          image-ref: cookix:ci
-          format: table
-          severity: CRITICAL,HIGH
-          # Fail the build on CRITICAL findings; HIGH is reported but not gating
-          # yet (base-image churn would make HIGH too flaky to block on).
-          exit-code: "1"
-          ignore-unfixed: true
-          vuln-type: os,library
-        env:
-          TRIVY_SEVERITY: CRITICAL
+        run: |
+          # Install Trivy from its official script (no marketplace-action version
+          # to pin/guess), then scan the built image.
+          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh \
+            | sh -s -- -b "$RUNNER_TEMP/bin"
+          # Report HIGH+CRITICAL; fail the build only on CRITICAL (HIGH churns with
+          # the base image and would be too flaky to gate on yet).
+          "$RUNNER_TEMP/bin/trivy" image --severity HIGH,CRITICAL --ignore-unfixed cookix:ci
+          "$RUNNER_TEMP/bin/trivy" image --severity CRITICAL --ignore-unfixed \
+            --exit-code 1 cookix:ci
 
       - name: Log in to GHCR
         if: startsWith(github.ref, 'refs/tags/v')
