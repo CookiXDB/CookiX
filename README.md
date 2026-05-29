@@ -98,6 +98,12 @@ cookix serve --demo pipe     # start from the pipe-compatibility demo
 
 Open the browser UI, type a natural-language query (e.g. *"what prevents rain?"*), and the matching reasoning path lights up on the graph. Switch the **ablation mode** in the UI to see exactly what the topology and sheaf layers add on top of pure graph traversal.
 
+### 3D sheaf explorer
+
+The UI also includes a **3D sheaf explorer** (linked from the top bar, or `/sheaf`). At `dim=3`, every object's sheaf stalk is a unit vector on the sphere and every relation is a rotation of it. Pick an anchor and a target, and watch the anchor's "meaning" get *carried* through each relation on the reasoning path — the gap between where it lands and the target's stalk **is** the composition residual. A coherent chain lands near the target; an incoherent one drifts away.
+
+> Honest note: the restriction maps are currently random placeholders, so residuals are large by design. The explorer is built to make that visible — when learned maps arrive, you'll *see* meaning start to compose.
+
 The server also exposes the database over HTTP for non-Python clients:
 
 ```bash

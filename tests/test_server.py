@@ -45,6 +45,29 @@ def test_query_multi_hop(client: TestClient):
     assert [s["relation"] for s in r["results"][0]["path"]] == ["prevents", "causes"]
 
 
+def test_sheaf_geometry(client: TestClient):
+    s = client.get("/api/sheaf").json()
+    assert s["dim"] == 3
+    assert all(len(n["stalk"]) == 3 for n in s["nodes"])
+    # stalks are unit vectors on the sphere
+    import math
+
+    n = next(n for n in s["nodes"] if n["id"] == "umbrella")
+    assert math.isclose(math.sqrt(sum(x * x for x in n["stalk"])), 1.0, rel_tol=1e-6)
+
+
+def test_sheaf_trace(client: TestClient):
+    t = client.post("/api/sheaf/trace", json={"anchor": "umbrella", "target": "wet_coat"}).json()
+    assert [p["relation"] for p in t["path"]] == ["prevents", "causes"]
+    # one starting vector + one per hop
+    assert len(t["steps"]) == 3
+    assert t["residual"] is not None and t["residual"] >= 0
+
+
+def test_sheaf_page(client: TestClient):
+    assert client.get("/sheaf").status_code == 200
+
+
 def test_insert(client: TestClient):
     resp = client.post(
         "/api/insert",

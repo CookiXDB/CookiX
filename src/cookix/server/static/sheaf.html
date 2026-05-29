@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>CookiX — 3D Sheaf Explorer</title>
+  <script src="https://unpkg.com/three@0.149.0/build/three.min.js"></script>
+  <script src="https://unpkg.com/three@0.149.0/examples/js/controls/OrbitControls.js"></script>
+  <style>
+    :root {
+      --bg: #1a1410; --panel: #241b14; --line: #3a2d22; --text: #f3ead9;
+      --muted: #b09b82; --accent: #e0a458; --anchor: #5fd38a; --target: #5aa9e6;
+      --carry: #ff7a45;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; font-family: "Segoe UI", system-ui, sans-serif;
+      background: var(--bg); color: var(--text); height: 100vh; overflow: hidden;
+      display: grid; grid-template-columns: 360px 1fr; grid-template-rows: 56px 1fr;
+      grid-template-areas: "header header" "sidebar scene";
+    }
+    header {
+      grid-area: header; display: flex; align-items: center; gap: 12px;
+      padding: 0 18px; background: var(--panel); border-bottom: 1px solid var(--line);
+    }
+    header img { width: 32px; height: 32px; border-radius: 6px; }
+    header h1 { font-size: 18px; margin: 0; font-weight: 600; }
+    header .tag { color: var(--muted); font-size: 12px; }
+    header a { margin-left: auto; color: var(--accent); text-decoration: none; font-size: 13px; }
+    header a:hover { text-decoration: underline; }
+    aside {
+      grid-area: sidebar; background: var(--panel); border-right: 1px solid var(--line);
+      padding: 18px; overflow-y: auto; display: flex; flex-direction: column; gap: 14px;
+    }
+    label { font-size: 12px; color: var(--muted); display: block; margin-bottom: 4px; }
+    select, button {
+      width: 100%; background: var(--bg); border: 1px solid var(--line);
+      color: var(--text); border-radius: 7px; padding: 9px 11px; font-size: 14px; font-family: inherit;
+    }
+    button { background: var(--accent); color: #1a1410; font-weight: 600; cursor: pointer; border: none; }
+    button:hover { filter: brightness(1.08); }
+    h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 6px 0 0; }
+    .legend { font-size: 12px; line-height: 1.7; }
+    .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 7px; vertical-align: middle; }
+    .residual { font-size: 15px; font-family: ui-monospace, monospace; padding: 10px 12px;
+      background: var(--bg); border: 1px solid var(--line); border-radius: 8px; }
+    .residual b { color: var(--carry); font-size: 20px; }
+    #steps { display: flex; flex-direction: column; gap: 6px; }
+    .step { font-size: 12px; font-family: ui-monospace, monospace; color: var(--muted); }
+    .step .rel { color: var(--accent); }
+    .note { font-size: 11px; color: var(--muted); line-height: 1.5; border-left: 2px solid var(--line); padding-left: 10px; }
+    #scene { grid-area: scene; position: relative; }
+    canvas { display: block; }
+  </style>
+</head>
+<body>
+  <header>
+    <img src="/static/logo.png" alt="CookiX" onerror="this.style.display='none'" />
+    <h1>CookiX</h1>
+    <span class="tag">3D sheaf explorer</span>
+    <a href="/">← reasoning-path explorer</a>
+  </header>
+
+  <aside>
+    <div>
+      <label for="anchor">Anchor (meaning starts here)</label>
+      <select id="anchor"></select>
+    </div>
+    <div>
+      <label for="target">Target (does it arrive here?)</label>
+      <select id="target"></select>
+    </div>
+    <button id="trace">Trace meaning along the path</button>
+
+    <div class="residual" id="residualBox" style="display:none">
+      composition residual: <b id="residualVal">—</b><br>
+      <span class="note" id="residualNote"></span>
+    </div>
+
+    <h2>Path</h2>
+    <div id="steps"><div class="step">Pick an anchor + target and trace.</div></div>
+
+    <h2>Legend</h2>
+    <div class="legend">
+      <div><span class="dot" style="background:var(--anchor)"></span>anchor stalk x<sub>a</sub></div>
+      <div><span class="dot" style="background:var(--carry)"></span>carried meaning S<sub>π</sub>(x<sub>a</sub>)</div>
+      <div><span class="dot" style="background:var(--target)"></span>target stalk x<sub>b</sub></div>
+    </div>
+
+    <p class="note">
+      At dim=3 each object's sheaf stalk is a unit vector on the sphere, and each
+      relation is a rotation of it. The orange vector is the anchor's meaning
+      <em>carried</em> through every relation on the path. The gap between where
+      it lands and the blue target stalk is the composition residual — 0 means a
+      perfectly coherent reasoning chain. (Restriction maps are currently random
+      placeholders, so expect large residuals: that is the unproven layer being
+      shown honestly, not hidden.)
+    </p>
+  </aside>
+
+  <div id="scene"></div>
+
+  <script>
+    const COL = { anchor: 0x5fd38a, carry: 0xff7a45, target: 0x5aa9e6, node: 0x8a6f52, sphere: 0x3a2d22 };
+    let scene, camera, renderer, controls;
+    let nodeMap = {};        // id -> [x,y,z]
+    let dynamic = [];        // transient objects to clear between traces
+    let animId = null;
+
+    async function api(path, body) {
+      const opts = body ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) } : {};
+      const res = await fetch(path, opts);
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    }
+
+    function v3(a) { return new THREE.Vector3(a[0], a[1], a[2]); }
+
+    function makeLabel(text, pos, color) {
+      const cv = document.createElement("canvas");
+      cv.width = 256; cv.height = 64;
+      const ctx = cv.getContext("2d");
+      ctx.font = "28px Segoe UI, sans-serif";
+      ctx.fillStyle = color || "#f3ead9";
+      ctx.textAlign = "center";
+      ctx.fillText(text, 128, 40);
+      const tex = new THREE.CanvasTexture(cv);
+      const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false }));
+      spr.position.copy(pos.clone().multiplyScalar(1.18));
+      spr.scale.set(0.6, 0.15, 1);
+      return spr;
+    }
+
+    function initScene() {
+      const el = document.getElementById("scene");
+      scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x1a1410);
+      camera = new THREE.PerspectiveCamera(55, el.clientWidth / el.clientHeight, 0.01, 100);
+      camera.position.set(2.4, 1.6, 2.4);
+      renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setSize(el.clientWidth, el.clientHeight);
+      renderer.setPixelRatio(window.devicePixelRatio);
+      el.appendChild(renderer.domElement);
+      controls = new THREE.OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+
+      // Unit sphere wireframe
+      const sphere = new THREE.Mesh(
+        new THREE.SphereGeometry(1, 32, 24),
+        new THREE.MeshBasicMaterial({ color: COL.sphere, wireframe: true, transparent: true, opacity: 0.35 })
+      );
+      scene.add(sphere);
+      scene.add(new THREE.AxesHelper(1.3));
+
+      window.addEventListener("resize", () => {
+        camera.aspect = el.clientWidth / el.clientHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(el.clientWidth, el.clientHeight);
+      });
+      animate();
+    }
+
+    function animate() {
+      requestAnimationFrame(animate);
+      controls.update();
+      renderer.render(scene, camera);
+    }
+
+    function drawNodes(nodes) {
+      nodes.forEach(n => {
+        nodeMap[n.id] = n.stalk;
+        const p = v3(n.stalk);
+        const dot = new THREE.Mesh(
+          new THREE.SphereGeometry(0.03, 12, 12),
+          new THREE.MeshBasicMaterial({ color: COL.node })
+        );
+        dot.position.copy(p);
+        scene.add(dot);
+        scene.add(makeLabel(n.id, p, "#b09b82"));
+      });
+    }
+
+    function clearDynamic() {
+      if (animId) cancelAnimationFrame(animId), (animId = null);
+      dynamic.forEach(o => scene.remove(o));
+      dynamic = [];
+    }
+
+    function addArrow(dir, color, len) {
+      const a = new THREE.ArrowHelper(dir.clone().normalize(), new THREE.Vector3(0, 0, 0), len || 1, color, 0.12, 0.07);
+      scene.add(a); dynamic.push(a);
+      return a;
+    }
+
+    // Slerp between two unit direction vectors.
+    function slerpDir(a, b, t) {
+      const dot = THREE.MathUtils.clamp(a.dot(b), -1, 1);
+      const theta = Math.acos(dot) * t;
+      const rel = b.clone().sub(a.clone().multiplyScalar(dot));
+      if (rel.lengthSq() < 1e-9) return a.clone();
+      rel.normalize();
+      return a.clone().multiplyScalar(Math.cos(theta)).add(rel.multiplyScalar(Math.sin(theta)));
+    }
+
+    function renderSteps(trace) {
+      const box = document.getElementById("steps");
+      box.innerHTML = "";
+      trace.steps.forEach((s, i) => {
+        const div = document.createElement("div");
+        div.className = "step";
+        div.innerHTML = i === 0
+          ? `start: ${s.label}`
+          : `<span class="rel">─[${s.relation}]→</span> ${s.label}`;
+        box.appendChild(div);
+      });
+    }
+
+    function animateTrace(trace) {
+      clearDynamic();
+      const dirs = trace.steps.map(s => v3(s.vector).normalize());
+      const targetDir = trace.target_stalk ? v3(trace.target_stalk).normalize() : null;
+
+      // Static reference arrows: anchor (green) and target (blue).
+      addArrow(dirs[0], COL.anchor);
+      if (targetDir) addArrow(targetDir, COL.target);
+
+      // Moving "carried meaning" arrow (orange), animated through each step.
+      const carry = addArrow(dirs[0], COL.carry);
+      let seg = 0, t = 0;
+      const speed = 0.012;
+
+      function tipLine() {
+        if (!targetDir) return;
+        const g = new THREE.BufferGeometry().setFromPoints([dirs[dirs.length - 1], targetDir]);
+        const line = new THREE.Line(g, new THREE.LineDashedMaterial({ color: COL.carry, dashSize: 0.06, gapSize: 0.04 }));
+        line.computeLineDistances();
+        scene.add(line); dynamic.push(line);
+      }
+
+      function frame() {
+        if (seg >= dirs.length - 1) {
+          carry.setDirection(dirs[dirs.length - 1]);
+          tipLine();
+          animId = null;
+          return;
+        }
+        t += speed;
+        if (t >= 1) { t = 0; seg++; }
+        const a = dirs[seg], b = dirs[Math.min(seg + 1, dirs.length - 1)];
+        carry.setDirection(slerpDir(a, b, Math.min(t, 1)));
+        animId = requestAnimationFrame(frame);
+      }
+      frame();
+    }
+
+    async function runTrace() {
+      const anchor = document.getElementById("anchor").value;
+      const target = document.getElementById("target").value;
+      const btn = document.getElementById("trace");
+      btn.disabled = true; btn.textContent = "Tracing…";
+      try {
+        const trace = await api("/api/sheaf/trace", { anchor, target });
+        if (trace.error || !trace.steps.length) {
+          document.getElementById("steps").innerHTML = `<div class="step">${trace.error || "no path"}</div>`;
+          document.getElementById("residualBox").style.display = "none";
+          clearDynamic();
+          return;
+        }
+        renderSteps(trace);
+        animateTrace(trace);
+        const box = document.getElementById("residualBox");
+        box.style.display = "block";
+        document.getElementById("residualVal").textContent = trace.residual.toFixed(4);
+        document.getElementById("residualNote").textContent =
+          trace.residual < 0.5 ? "low — coherent composition"
+          : trace.residual < 1.0 ? "moderate" : "high — meaning did not compose to the target";
+      } catch (e) {
+        document.getElementById("steps").innerHTML = `<div class="step">Error: ${e.message}</div>`;
+      } finally {
+        btn.disabled = false; btn.textContent = "Trace meaning along the path";
+      }
+    }
+
+    async function init() {
+      initScene();
+      const g = await api("/api/sheaf");
+      drawNodes(g.nodes);
+      const anchorSel = document.getElementById("anchor");
+      const targetSel = document.getElementById("target");
+      g.nodes.map(n => n.id).sort().forEach(id => {
+        anchorSel.add(new Option(id, id));
+        targetSel.add(new Option(id, id));
+      });
+      // Sensible default for the umbrella demo.
+      if (nodeMap["umbrella"]) anchorSel.value = "umbrella";
+      if (nodeMap["wet_coat"]) targetSel.value = "wet_coat";
+      else if (targetSel.options.length > 1) targetSel.selectedIndex = 1;
+      document.getElementById("trace").onclick = runTrace;
+    }
+
+    init();
+  </script>
+</body>
+</html>

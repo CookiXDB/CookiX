@@ -11,6 +11,10 @@ All notable changes to CookiX are documented here. The format follows
   exposing `/api/info`, `/api/graph`, `/api/insert`, `/api/query`.
 - **Reasoning-path explorer UI** — a browser graph view that highlights the
   typed path justifying each answer, with live ablation-mode switching.
+- **3D sheaf explorer** (`/sheaf`, `/api/sheaf`, `/api/sheaf/trace`) — a Three.js
+  view where each object's stalk is a unit vector on the sphere and each
+  relation is a rotation; animates an anchor's meaning being carried along a
+  reasoning path and shows the composition residual as the gap to the target.
 
 ### Changed
 - **Inverse relations are now virtual in single-hop lookup.** Querying a
