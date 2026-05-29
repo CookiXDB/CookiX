@@ -28,7 +28,7 @@ from enum import Enum
 
 from . import relations as rel
 from . import sheaf, topology
-from .model import QueryResult, ReasoningStep
+from .model import KnowledgeObject, QueryResult, ReasoningStep
 from .storage.base import StorageBackend
 
 
@@ -179,20 +179,47 @@ class QueryEngine:
     # ------------------------------------------------------------------ #
     # Stages 3-4: topological + sheaf re-ranking
     # ------------------------------------------------------------------ #
-    def _topo_term(self, anchor: str, candidate: str) -> float | None:
+    def _get_cached(
+        self, obj_id: str, cache: dict[str, KnowledgeObject | None] | None
+    ) -> KnowledgeObject | None:
+        """Fetch an object, memoising within a single ranking pass.
+
+        Ranking re-ranks every candidate against the same ``anchor`` and the
+        topology + sheaf terms each look the anchor up again, so without a cache
+        the anchor is fetched O(candidates) times. Storage is not mutated during
+        ranking, so memoising is safe and bounded to one query.
+        """
+        if cache is None:
+            return self.storage.get(obj_id)
+        if obj_id not in cache:
+            cache[obj_id] = self.storage.get(obj_id)
+        return cache[obj_id]
+
+    def _topo_term(
+        self,
+        anchor: str,
+        candidate: str,
+        cache: dict[str, KnowledgeObject | None] | None = None,
+    ) -> float | None:
         if not topology.AVAILABLE:
             return None
-        a = self.storage.get(anchor)
-        b = self.storage.get(candidate)
+        a = self._get_cached(anchor, cache)
+        b = self._get_cached(candidate, cache)
         if a is None or b is None or a.topo_signature is None or b.topo_signature is None:
             return None
         similarity = topology.tvs(a.topo_signature, b.topo_signature, self.config.tvs_bandwidth)
         return 1.0 - similarity
 
-    def _sheaf_term(self, anchor: str, candidate: str, path: list[ReasoningStep]) -> float:
+    def _sheaf_term(
+        self,
+        anchor: str,
+        candidate: str,
+        path: list[ReasoningStep],
+        cache: dict[str, KnowledgeObject | None] | None = None,
+    ) -> float:
         dim = self.config.sheaf_dim
-        a = self.storage.get(anchor)
-        b = self.storage.get(candidate)
+        a = self._get_cached(anchor, cache)
+        b = self._get_cached(candidate, cache)
         stalk_a = (
             a.sheaf_stalk if a is not None and a.sheaf_stalk is not None
             else sheaf.default_stalk(anchor, dim)
@@ -208,19 +235,20 @@ class QueryEngine:
     ) -> list[QueryResult]:
         """Apply the composite distance to re-rank candidate paths."""
         cfg = self.config
+        cache: dict[str, KnowledgeObject | None] = {}
         for result in candidates:
             geodesic = result.components.get("geodesic", result.score)
             score = cfg.alpha * geodesic
             components = {"geodesic": geodesic}
 
             if mode.use_topo:
-                topo = self._topo_term(anchor, result.object_id)
+                topo = self._topo_term(anchor, result.object_id, cache)
                 if topo is not None:
                     score += cfg.beta * topo
                     components["topo"] = topo
 
             if mode.use_sheaf:
-                residual = self._sheaf_term(anchor, result.object_id, result.path)
+                residual = self._sheaf_term(anchor, result.object_id, result.path, cache)
                 score += cfg.gamma * residual
                 components["sheaf"] = residual
 

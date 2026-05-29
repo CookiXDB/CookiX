@@ -50,6 +50,14 @@ def _cmd_serve(args: argparse.Namespace) -> int:
 
 
 def _cmd_eval(args: argparse.Namespace) -> int:
+    if args.perf:
+        from .eval import run_perf_benchmark, to_markdown_perf
+
+        print(to_markdown_perf(
+            run_perf_benchmark(seed=args.seed, n_worlds=args.worlds, k=args.k)
+        ))
+        return 0
+
     if args.sheaf:
         from .eval import run_sheaf_ablation, to_markdown_sheaf
 
@@ -106,6 +114,8 @@ def main(argv: list[str] | None = None) -> int:
                     help="with --extraction, also score the LLM extractor (needs an API key)")
     ev.add_argument("--sheaf", action="store_true",
                     help="run the learned-sheaf residual ablation instead of retrieval")
+    ev.add_argument("--perf", action="store_true",
+                    help="time the query engine per ablation mode instead of scoring")
     ev.set_defaults(func=_cmd_eval)
 
     args = parser.parse_args(argv)

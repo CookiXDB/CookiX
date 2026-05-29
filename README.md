@@ -302,6 +302,36 @@ Whether real LLM-derived stalks satisfy that, and whether gradient-based neural 
 diffusion (jointly learning stalks and maps) does better, remains the open question. The
 layer stays ablatable so the answer is measured, not assumed.
 
+### Query performance
+
+Correctness is necessary but not sufficient — the engine also has to be fast
+enough to use. The same synthetic corpus doubles as a throughput benchmark:
+
+```bash
+cookix eval --perf       # time the end-to-end query path per ablation mode
+```
+
+End-to-end (natural language in, ranked reasoning paths out) over 240 documents,
+160 queries × 3 repeats, single-threaded pure Python:
+
+| mode | median latency | p95 | throughput |
+|---|---|---|---|
+| graph-only | 0.06 ms | 0.13 ms | ~13,000 q/s |
+| + topology | 0.06 ms | 0.16 ms | ~13,000 q/s |
+| + sheaf | 0.07 ms | 0.36 ms | ~7,000 q/s |
+| full (all layers) | 0.07 ms | 0.38 ms | ~6,500 q/s |
+
+Numbers are from one machine and move with hardware and load; only the *relative*
+cost of each layer is portable, and the workload is fixed by `seed`. The graph
+baseline is sub-0.1 ms median; the sheaf term roughly halves throughput, which is
+the price of composition re-ranking and is itself a measured trade-off rather than
+an assumption. Ranking memoises per-query object lookups so adding layers does not
+re-fetch the anchor for every candidate.
+
+Honest scope: this is a Python-level micro-benchmark on synthetic data, not a
+sustained-load or large-corpus benchmark. The Rust hot-path core (roadmap below)
+targets exactly the geodesic/ranking inner loop these numbers measure.
+
 ---
 
 ## Use cases
@@ -322,8 +352,9 @@ layer stays ablatable so the answer is measured, not assumed.
 - [x] **Phase 2** — Extraction-quality study (`cookix eval --extraction`): gold-triple corpus, precision/recall/F1 + relation-typing accuracy, and the measured per-edge `pʰ` multi-hop ceiling. *Next: quantify how much an LLM extractor buys back.*
 - [x] **Phase 3** — Learned sheaf restriction maps (`cookix eval --sheaf`): orthogonal-Procrustes maps learned per relation, ~50–60% held-out residual drop vs the random placeholder. *Next: neural sheaf diffusion (jointly learn stalks + maps).*
 - [x] **Phase 4** — Durable Kùzu backend hardened to in-memory parity (shared test battery: dangling-target and incoming-edge semantics) + `TopoIndex` (cosine-LSH ANN over persistence signatures, with exact fallback + recall measure).
-- [ ] **Phase 5** — Rust hot-path core via PyO3; optional server mode
-- [ ] **v1.0** — Production release
+- [x] **Phase 5** — Reproducible performance benchmark (`cookix eval --perf`): per-mode end-to-end latency/throughput on the synthetic corpus, plus per-query lookup memoisation in the ranking pass. *Next: the Rust hot-path core targeting this inner loop.*
+- [ ] **Phase 6** — Rust hot-path core via PyO3 for the geodesic/ranking loop; external multi-hop datasets (HotpotQA, 2WikiMultiHopQA, MuSiQue)
+- [ ] **v1.0** — Production release (gated on external benchmarks + the Rust core)
 
 ---
 
