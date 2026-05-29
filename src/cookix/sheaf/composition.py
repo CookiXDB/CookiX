@@ -28,6 +28,22 @@ from .. import relations
 
 AVAILABLE = True  # numpy-only; always importable
 
+# Optional learned maps (see :mod:`cookix.sheaf.learning`). When installed via
+# :func:`set_learned_maps`, they replace the placeholder for any relation they
+# cover, at the dimension they were trained for.
+_LEARNED: dict[str, np.ndarray] | None = None
+
+
+def set_learned_maps(maps: dict[str, np.ndarray] | None) -> None:
+    """Install (or clear with ``None``) learned restriction maps globally.
+
+    Maps are keyed by relation name and already direction-resolved (inverse
+    relations hold the transpose). They are consulted by :func:`restriction_map`
+    only when the requested dimension matches the learned matrices.
+    """
+    global _LEARNED
+    _LEARNED = maps
+
 
 def _seed_from_relation(relation: str) -> int:
     digest = hashlib.sha256(relation.encode("utf-8")).digest()
@@ -35,12 +51,19 @@ def _seed_from_relation(relation: str) -> int:
 
 
 def restriction_map(relation: str, dim: int) -> np.ndarray:
-    """Deterministic orthogonal restriction map for a relation type.
+    """Restriction map for a relation type.
 
-    Same relation name always yields the same map; the inverse relation yields
-    its transpose, so walking an edge backwards undoes the transform. Symmetric
-    relations are their own inverse.
+    Returns a learned map when one has been installed for this relation at the
+    matching dimension (see :func:`set_learned_maps`); otherwise a deterministic
+    orthogonal placeholder. Same relation name always yields the same map; the
+    inverse relation yields its transpose, so walking an edge backwards undoes
+    the transform. Symmetric relations are their own inverse.
     """
+    if _LEARNED is not None:
+        learned = _LEARNED.get(relation)
+        if learned is not None and learned.shape == (dim, dim):
+            return learned
+
     inverse = relations.inverse_of(relation)
     # For one direction of each inverse pair, build the map; the other direction
     # transposes it. Pick the lexicographically smaller name as the "forward" one

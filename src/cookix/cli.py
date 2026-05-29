@@ -50,6 +50,12 @@ def _cmd_serve(args: argparse.Namespace) -> int:
 
 
 def _cmd_eval(args: argparse.Namespace) -> int:
+    if args.sheaf:
+        from .eval import run_sheaf_ablation, to_markdown_sheaf
+
+        print(to_markdown_sheaf(run_sheaf_ablation(seed=args.seed)))
+        return 0
+
     if args.extraction:
         from .eval import run_extraction_study, to_markdown_extraction
 
@@ -98,6 +104,8 @@ def main(argv: list[str] | None = None) -> int:
                     help="run the extraction-quality study instead of retrieval")
     ev.add_argument("--llm", action="store_true",
                     help="with --extraction, also score the LLM extractor (needs an API key)")
+    ev.add_argument("--sheaf", action="store_true",
+                    help="run the learned-sheaf residual ablation instead of retrieval")
     ev.set_defaults(func=_cmd_eval)
 
     args = parser.parse_args(argv)

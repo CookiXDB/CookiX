@@ -39,6 +39,7 @@ from .harness import (
     run_benchmark,
 )
 from .report import to_json, to_markdown
+from .sheaf_study import SheafAblation, run_sheaf_ablation, to_markdown_sheaf
 
 __all__ = [
     "synthetic_corpus",
@@ -61,4 +62,7 @@ __all__ = [
     "run_extraction_study",
     "projected_multihop_accuracy",
     "to_markdown_extraction",
+    "SheafAblation",
+    "run_sheaf_ablation",
+    "to_markdown_sheaf",
 ]

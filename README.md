@@ -165,7 +165,7 @@ db.query(anchor="a", target="b", mode="reasoning") # full pipeline
 CookiX is built to **test** the NoVectDB paradigm, not to oversell it. Being straight about what's proven and what isn't:
 
 - ✅ **The typed-graph core works and is well-founded.** Typed relational retrieval beating flat vector similarity on relational/multi-hop/contradiction queries is established across the knowledge-graph and GraphRAG literature.
-- 🧪 **Persistent homology (𝒯) and sheaf composition (𝒮) are open research bets.** They are implemented as *optional, ablatable* layers precisely so their contribution can be **measured** against the graph-only baseline — not assumed. The sheaf restriction maps are currently a deterministic placeholder; *learning* them is future work.
+- 🧪 **Persistent homology (𝒯) and sheaf composition (𝒮) are open research bets.** They are implemented as *optional, ablatable* layers precisely so their contribution can be **measured** against the graph-only baseline — not assumed. The sheaf restriction maps are no longer only a placeholder: they can now be **learned** from edge evidence (`cookix.sheaf.set_learned_maps`), and the learned maps cut held-out composition residual substantially — see [Benchmarks](#benchmarks).
 - 📊 **The benchmark harness now ships in-repo and is reproducible from a single seed** (`cookix eval`). It runs on a synthetic relational corpus against fair baselines and every ablation; see [Benchmarks](#benchmarks) below. Porting it to external multi-hop datasets (HotpotQA, 2WikiMultiHopQA, MuSiQue) is the next step.
 
 If the exotic layers don't earn their keep in honest ablations, we'll say so. That's the point.
@@ -256,6 +256,37 @@ first-class, swappable component** and why the `LLMExtractor` exists — and it 
 Phase 2's open question: how much of that ceiling does an LLM extractor actually buy
 back? (The LLM run needs an API key, so it is kept out of the deterministic suite.)
 
+### Learned sheaf restriction maps
+
+The sheaf layer scores a chain by its **composition residual**
+`||S_π(x_a) − x_b||`: low residual = a coherent reasoning path. The maps `F_r` shipped
+by default are random orthogonal placeholders, so that residual is uninformative. CookiX
+can now **learn** them — the closed-form orthogonal Procrustes map per relation that best
+transports source stalks onto targets, with inverses tied to transposes:
+
+```bash
+cookix eval --sheaf      # residual ablation: placeholder vs learned
+```
+
+On approximately sheaf-consistent synthetic data (per-component noise 0.1, `dim=16`),
+evaluated on **held-out** edges and 2-hop paths:
+
+| maps | 1-hop residual | 2-hop residual |
+|---|---|---|
+| placeholder (random) | 1.399 | 1.416 |
+| learned (Procrustes) | 0.534 | 0.731 |
+| **residual drop** | **62%** | **48%** |
+
+The placeholder sits at ~√2 ≈ 1.41 — the expected distance between two unrelated unit
+vectors, i.e. no information. Learning the maps cuts residual by roughly half on data the
+maps never saw; the remaining residual tracks the injected noise floor, not memorisation.
+
+Honest scope: this demonstrates that **when relations act near-linearly on semantic
+frames, the maps are recoverable** — the linear, closed-form rung of "learned sheaves".
+Whether real LLM-derived stalks satisfy that, and whether gradient-based neural sheaf
+diffusion (jointly learning stalks and maps) does better, remains the open question. The
+layer stays ablatable so the answer is measured, not assumed.
+
 ---
 
 ## Use cases
@@ -274,7 +305,7 @@ back? (The LLM run needs an API key, so it is kept out of the deterministic suit
 - [x] **Phase 0** — HTTP server (`cookix serve`) + browser reasoning-path explorer UI
 - [x] **Phase 1** — Reproducible benchmark harness (`cookix eval`): synthetic relational corpus, fair vector-family + no-skill baselines, all ablations, deterministic from one seed. *Next: port to external multi-hop datasets.*
 - [x] **Phase 2** — Extraction-quality study (`cookix eval --extraction`): gold-triple corpus, precision/recall/F1 + relation-typing accuracy, and the measured per-edge `pʰ` multi-hop ceiling. *Next: quantify how much an LLM extractor buys back.*
-- [ ] **Phase 3** — Learned sheaf restriction maps (neural sheaf diffusion)
+- [x] **Phase 3** — Learned sheaf restriction maps (`cookix eval --sheaf`): orthogonal-Procrustes maps learned per relation, ~50–60% held-out residual drop vs the random placeholder. *Next: neural sheaf diffusion (jointly learn stalks + maps).*
 - [ ] **Phase 4** — Durable Kùzu backend hardening + TopoIndex (ANN over persistence diagrams)
 - [ ] **Phase 5** — Rust hot-path core via PyO3; optional server mode
 - [ ] **v1.0** — Production release
