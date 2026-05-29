@@ -18,6 +18,7 @@ Quickstart::
 from __future__ import annotations
 
 from . import relations
+from .client import API_VERSION, CookixClient, CookixError
 from .database import Database, connect
 from .engine import EngineConfig, QueryEngine, RetrievalMode
 from .model import Edge, KnowledgeObject, QueryResult, ReasoningStep
@@ -26,6 +27,7 @@ __version__ = "0.2.0"
 
 __all__ = [
     "__version__",
+    "API_VERSION",
     "connect",
     "Database",
     "QueryEngine",
@@ -35,5 +37,7 @@ __all__ = [
     "Edge",
     "QueryResult",
     "ReasoningStep",
+    "CookixClient",
+    "CookixError",
     "relations",
 ]

@@ -7,6 +7,12 @@ All notable changes to CookiX are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- **Typed Python client** (`cookix.CookixClient`) — a dependency-free
+  (stdlib-`urllib`) client over the stable HTTP wire API, with an injectable
+  transport for testing. Plus `cookix.API_VERSION` (reported at `/api/info`), a
+  documented SemVer/deprecation policy (`API_STABILITY.md`), and a **versioned,
+  migration-guarded on-disk snapshot format** (`SNAPSHOT_FORMAT_VERSION`) that
+  refuses a newer format and still reads the legacy layout.
 - **Production server hardening** (`cookix.server.ServerConfig`, `COOKIX_*` env,
   `cookix serve --api-key/--rate-limit/--read-only`) — opt-in API-key auth
   (constant-time), per-client rate limiting, `k`/`max_hops`/body-size limits,

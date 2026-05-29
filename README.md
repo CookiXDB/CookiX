@@ -214,6 +214,18 @@ cookix serve --api-key "$KEY" --rate-limit 600   # auth + 600 req/min/client
 A hardened, non-root [`Dockerfile`](Dockerfile) (with a `/healthz` HEALTHCHECK)
 ships in the repo: `docker build -t cookix . && docker run -p 8000:8000 cookix`.
 
+Talk to a running server from another process with the dependency-free typed
+client over the stable wire API (see [API_STABILITY.md](API_STABILITY.md)):
+
+```python
+from cookix import CookixClient
+
+db = CookixClient("http://localhost:8000", api_key="…")
+db.insert({"_id": "umbrella", "content": "umbrella", "edges": [("prevents", "rain")]})
+for r in db.query("what prevents rain?"):
+    print(r["explain"])
+```
+
 ---
 
 ## The honest status
@@ -466,7 +478,7 @@ algorithmic win shipped here is the settle-once/early-exit Dijkstra, in Python.
 - [~] **Phase 7** — *Performance gate (partial).* Scaling benchmark (`cookix eval --scale`) + settle-once/early-exit Dijkstra: **query latency near-flat ~2 ms from 1k→50k objects**, ~3 KB/object. Rust/PyO3 hot-path core still **deferred** (needs a Rust toolchain not present in this environment).
 - [x] **Phase 8** — *Data-safety gate.* `durable` backend: write-ahead log (fsync-on-commit, CRC torn-write tolerance), atomic snapshots, atomic-batch transactions, thread-safe single-writer locking, backup/restore — proven by a crash-recovery, rollback, concurrency-stress and round-trip test battery.
 - [x] **Phase 9** — *Deployability gate.* API-key auth, per-client rate limiting, `k`/`max_hops`/body-size limits, read-only mode, JSON access logs, Prometheus `/metrics`, `/healthz` + `/readyz`, a documented threat model ([SECURITY.md](SECURITY.md)), and a hardened non-root `Dockerfile`. *(App hardening test-proven; the container image is provided but not build-validated in this environment.)*
-- [ ] **Phase 10** — *Distribution gate.* Frozen versioned API (OpenAPI) + SemVer policy, typed Python client, cross-platform wheels on PyPI, on-disk migration tooling.
+- [x] **Phase 10** — *Distribution gate.* Versioned wire API (`API_VERSION`, exposed at `/api/info`) + SemVer/deprecation policy ([API_STABILITY.md](API_STABILITY.md)), a dependency-free typed `CookixClient`, a versioned on-disk format with a migration guard, and a wheel+sdist that **build, pass `twine check`, and install+run in a clean venv**. *(Actual PyPI publish is the maintainer's step — it needs credentials and is intentionally not automated.)*
 - [ ] **Phase 11 / v1.0** — Full docs, perf-regression CI, end-to-end smoke test. Released only when gates 6–10 all hold.
 
 Explicitly **out of scope for v1.0**: distributed clustering/sharding, a hosted service, and any claim that the 𝒯/𝒮 layers help retrieval before Phase 6 measures it.

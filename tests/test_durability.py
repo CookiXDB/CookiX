@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+import pickle
 import threading
 
 import pytest
 
 from cookix import connect
 from cookix.model import Edge, KnowledgeObject
-from cookix.storage.durable import DurableBackend
+from cookix.storage.durable import SNAPSHOT_FORMAT_VERSION, DurableBackend
 from cookix.storage.wal import WriteAheadLog
 
 
@@ -138,6 +139,34 @@ def test_backup_restore_round_trip_is_equivalent(tmp_path):
     assert len(restored) == len(b)
     assert set(restored.all_ids()) == set(b.all_ids())
     assert restored.out_edges("n5")[0].target == "n6"
+
+
+# --------------------------------------------------------------------------- #
+# On-disk format versioning (migration guard)
+# --------------------------------------------------------------------------- #
+def test_snapshot_is_versioned_and_legacy_is_still_readable(tmp_path):
+    b = DurableBackend(tmp_path / "db", autosnapshot_ops=10_000)
+    b.put(_obj("a"))
+    b.snapshot()
+    with open(tmp_path / "db" / "snapshot.pkl", "rb") as fh:
+        blob = pickle.load(fh)
+    assert blob["format_version"] == SNAPSHOT_FORMAT_VERSION
+
+    # A pre-versioning bare-dict snapshot must still load (read as legacy).
+    legacy_dir = tmp_path / "legacy"
+    legacy_dir.mkdir()
+    with open(legacy_dir / "snapshot.pkl", "wb") as fh:
+        pickle.dump({"a": _obj("a")}, fh)
+    assert "a" in DurableBackend(legacy_dir)
+
+
+def test_future_format_version_is_refused(tmp_path):
+    db_dir = tmp_path / "db"
+    db_dir.mkdir()
+    with open(db_dir / "snapshot.pkl", "wb") as fh:
+        pickle.dump({"format_version": SNAPSHOT_FORMAT_VERSION + 99, "objects": {}}, fh)
+    with pytest.raises(ValueError, match="newer than this build"):
+        DurableBackend(db_dir)
 
 
 # --------------------------------------------------------------------------- #

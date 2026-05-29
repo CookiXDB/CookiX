@@ -36,6 +36,10 @@ from .base import StorageBackend
 from .memory import InMemoryBackend
 from .wal import WriteAheadLog
 
+# On-disk snapshot format version. Bumped on any change to the serialised layout;
+# load() refuses a newer version with a clear error rather than mis-reading it.
+SNAPSHOT_FORMAT_VERSION = 1
+
 
 class DurableBackend(StorageBackend):
     """In-memory speed with on-disk durability, atomic batches and locking."""
@@ -58,11 +62,25 @@ class DurableBackend(StorageBackend):
     # ------------------------------------------------------------------ #
     # Recovery
     # ------------------------------------------------------------------ #
+    @staticmethod
+    def _load_snapshot(path: Path) -> dict[str, KnowledgeObject]:
+        """Load a snapshot, validating the format version (migration guard)."""
+        with open(path, "rb") as fh:
+            blob = pickle.load(fh)
+        if isinstance(blob, dict) and "format_version" in blob:
+            version = blob["format_version"]
+            if version > SNAPSHOT_FORMAT_VERSION:
+                raise ValueError(
+                    f"snapshot format v{version} is newer than this build supports "
+                    f"(v{SNAPSHOT_FORMAT_VERSION}); upgrade CookiX to read it"
+                )
+            return blob["objects"]
+        # Legacy bare-dict snapshot (pre-versioning) — read as v0.
+        return blob
+
     def _recover(self) -> None:
         if self._snap_path.exists():
-            with open(self._snap_path, "rb") as fh:
-                objects: dict[str, KnowledgeObject] = pickle.load(fh)
-            for obj in objects.values():
+            for obj in self._load_snapshot(self._snap_path).values():
                 self._mem.put(obj)
         if self._wal_path.exists():
             for record in WriteAheadLog(self._wal_path).replay():
@@ -166,8 +184,12 @@ class DurableBackend(StorageBackend):
 
     def _atomic_write_snapshot(self, dest: Path) -> None:
         tmp = dest.with_suffix(dest.suffix + ".tmp")
+        envelope = {
+            "format_version": SNAPSHOT_FORMAT_VERSION,
+            "objects": self._mem._objects,
+        }
         with open(tmp, "wb") as fh:
-            pickle.dump(self._mem._objects, fh, protocol=pickle.HIGHEST_PROTOCOL)
+            pickle.dump(envelope, fh, protocol=pickle.HIGHEST_PROTOCOL)
             fh.flush()
             os.fsync(fh.fileno())
         os.replace(tmp, dest)  # atomic on POSIX and Windows
@@ -182,8 +204,7 @@ class DurableBackend(StorageBackend):
         """Rebuild a fresh durable store at ``into`` from a ``backup`` snapshot."""
         into = Path(into)
         into.mkdir(parents=True, exist_ok=True)
-        with open(backup_path, "rb") as fh:
-            objects: dict[str, KnowledgeObject] = pickle.load(fh)
+        objects = cls._load_snapshot(Path(backup_path))
         backend = cls(into)
         with backend.transaction() as tx:
             for obj in objects.values():

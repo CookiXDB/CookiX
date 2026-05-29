@@ -165,9 +165,25 @@ _Original plan:_
 
 ---
 
-## Phase 10 — API stability, clients & packaging *(distribution gate)*
+## Phase 10 — API stability, clients & packaging *(distribution gate)* — ◐ MOSTLY DONE
 
 A `1.0` is a promise. This phase makes the promise concrete.
+
+**Done:** a versioned wire API (`cookix.API_VERSION`, reported at `/api/info`)
+with a written SemVer + deprecation policy (`API_STABILITY.md`); a
+dependency-free typed `CookixClient` (stdlib `urllib`, injectable transport,
+tested against the in-process app); a versioned on-disk snapshot format
+(`SNAPSHOT_FORMAT_VERSION`) that refuses a newer format and still reads the
+legacy layout (migration guard); and a wheel + sdist that **build, pass
+`twine check`, and install + run a query in a clean virtualenv**.
+
+**Deferred (needs maintainer credentials):** the actual **PyPI publish** and
+multi-OS **cibuildwheel** matrix. CookiX is currently pure-Python, so the single
+`py3-none-any` wheel already covers all platforms; once the Phase 7 Rust core
+lands, the cibuildwheel matrix becomes necessary. Publishing is intentionally not
+automated in-repo without a trusted CI secret.
+
+_Original plan:_
 
 **Deliverables**
 - A frozen, versioned wire API with a published **OpenAPI spec** and a written

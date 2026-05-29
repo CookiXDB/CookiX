@@ -191,10 +191,12 @@ def create_app(db: Database, config: ServerConfig | None = None) -> Any:
     @app.get("/api/info")
     def info() -> dict[str, Any]:
         from .. import relations
+        from ..client import API_VERSION
 
         return {
             "name": "CookiX",
             "version": _version(),
+            "api_version": API_VERSION,
             "objects": len(db),
             "modes": [m.value for m in RetrievalMode],
             "relations": relations.vocabulary(),
