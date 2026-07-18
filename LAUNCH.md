@@ -75,6 +75,45 @@ https://github.com/CookiXDB/CookiX — feedback very welcome.
 
 ---
 
+## LinkedIn (company-page first post — narrative)
+
+> Upload `assets/demo.mp4` as native video (not a link — native gets more reach).
+
+I spent the last stretch building CookiX — an open-source database that answers
+relational questions with the reasoning path that proves them, not just a
+similarity score. It's live: pip install cookix 🍪
+
+The itch: vector search is great for "find me similar text," but it falls apart on
+directed, multi-hop questions. Ask "which of my services does this CVE reach, and
+through which dependency chain?" and a vector DB hands back a blob of nearby names
+— no direction, no reason.
+
+CookiX stores knowledge as typed, directed edges and answers by traversing them,
+returning the exact chain:
+
+checkout_api → fast_json → tinyparse → CVE-2024-5001
+
+Three hops, zero shared words. That link lives only in the edges — and CookiX
+shows it to you.
+
+The honest part (I'd rather you trust the numbers than the hype): on
+2WikiMultiHopQA, given the question's entity, CookiX beats BM25 by ~50% on
+multi-hop retrieval — and returns the reasoning path a vector DB structurally
+can't. End-to-end it's currently at parity, because linking the right entity is
+the bottleneck. I'm reporting that straight; an LLM-assisted linker is next.
+
+What it's not: a vector-DB replacement, and not (yet) distributed. It shines when
+your problem is relational and you need answers you can audit — explainable RAG,
+dependency/impact analysis, contraindication chains, compatibility graphs.
+
+Apache-2.0. Built solo, in Morocco 🇲🇦. Genuinely want the hard questions.
+
+▶️ 30-second demo + repo: github.com/CookiXDB/CookiX
+
+\#opensource #database #AI #RAG #knowledgegraph #machinelearning
+
+---
+
 ## Reddit (r/LocalLLaMA, r/MachineLearning, r/databases)
 
 **Title:** `CookiX: a pip-installable database that returns the reasoning path for multi-hop queries (honest benchmark inside)`
