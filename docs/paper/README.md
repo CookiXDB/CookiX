@@ -2,14 +2,13 @@
 
 | File | What it is |
 |---|---|
-| [`novectdb.tex`](novectdb.tex) | **Current** paper source, corrected edition (August 2026) |
-| [`CHANGES.md`](CHANGES.md) | Itemised corrections against the February 2026 preprint |
-| [`../paper.pdf`](../paper.pdf) | The February 2026 preprint — **superseded**, retained for the correction trail |
+| [`novectdb.tex`](novectdb.tex) | Paper source |
+| [`CLAIMS.md`](CLAIMS.md) | Internal note: what this project may and may not claim, and the measurement behind each |
 
 ## Build
 
 Needs a LaTeX distribution (TeX Live, MiKTeX) with `amsmath`, `amsthm`, `booktabs`,
-`algorithm`, `hyperref`, `geometry`, `xcolor`.
+`algorithm`, `hyperref`, `geometry`.
 
 ```bash
 cd docs/paper && pdflatex novectdb && pdflatex novectdb
@@ -18,17 +17,18 @@ cd docs/paper && pdflatex novectdb && pdflatex novectdb
 Two passes resolve cross-references. The bibliography is inlined as a `thebibliography`
 environment, so BibTeX is not required.
 
-> Not yet compiled: no TeX toolchain was available on the machine where this source was
-> written. It passes a structural check (balanced environments and braces, all
+> **Not yet compiled.** No TeX toolchain was available on the machine where this source
+> was written. It passes a structural check (balanced environments and braces, all
 > `\ref`/`\cite` targets resolving, tabular column counts matching) but has not been
 > through a real build.
 
 ## The rule this source follows
 
 Every quantitative claim names the command that produces it, and no number appears that
-this repository cannot reproduce. When a measurement contradicts a hypothesis the paper
+this repository cannot reproduce. Where a measurement contradicts a hypothesis the paper
 would prefer, the measurement is reported — see §"A negative result for the sheaf layer"
-and §"Corrections relative to the February 2026 preprint".
+and §"No dense-retrieval baseline has been run". See [`CLAIMS.md`](CLAIMS.md) for the
+full discipline.
 
 Reproducing the numbers:
 
