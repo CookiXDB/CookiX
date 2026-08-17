@@ -42,3 +42,14 @@ Thumbs.db
 
 # Local editor/preview tooling
 .claude/
+
+# LaTeX build artifacts (docs/paper). The compiled PDF is committed; intermediates are not.
+*.aux
+*.log
+*.out
+*.toc
+*.bbl
+*.blg
+*.fls
+*.fdb_latexmk
+*.synctex.gz

@@ -2,6 +2,7 @@
 
 | File | What it is |
 |---|---|
+| [`novectdb.pdf`](novectdb.pdf) | Compiled paper, 11 pages |
 | [`novectdb.tex`](novectdb.tex) | Paper source |
 | [`CLAIMS.md`](CLAIMS.md) | Internal note: what this project may and may not claim, and the measurement behind each |
 
@@ -17,10 +18,16 @@ cd docs/paper && pdflatex novectdb && pdflatex novectdb
 Two passes resolve cross-references. The bibliography is inlined as a `thebibliography`
 environment, so BibTeX is not required.
 
-> **Not yet compiled.** No TeX toolchain was available on the machine where this source
-> was written. It passes a structural check (balanced environments and braces, all
-> `\ref`/`\cite` targets resolving, tabular column counts matching) but has not been
-> through a real build.
+With [Tectonic](https://tectonic-typesetting.github.io/) (single binary, fetches packages
+on demand) one invocation is enough:
+
+```bash
+cd docs/paper && tectonic -X compile novectdb.tex
+```
+
+Build status of the committed PDF: clean — no errors, no undefined references, zero
+overfull or underfull boxes, 11 pages. The one warning comes from inside `algorithm.sty`
+(a non-UTF-8 byte in its own copyright line) and is not from this source.
 
 ## The rule this source follows
 
