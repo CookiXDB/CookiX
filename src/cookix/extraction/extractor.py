@@ -155,7 +155,7 @@ class LLMExtractor:
     output shape is identical regardless of backend.
     """
 
-    def __init__(self, model: str = "claude-sonnet-4-6", api_key: str | None = None) -> None:
+    def __init__(self, model: str = "claude-sonnet-5", api_key: str | None = None) -> None:
         try:
             import anthropic
         except ImportError as exc:  # pragma: no cover - optional dep

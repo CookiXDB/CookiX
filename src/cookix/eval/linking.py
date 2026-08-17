@@ -110,7 +110,7 @@ class LLMEntityLinker:
     def __init__(
         self,
         nodes: Iterable[str],
-        model: str = "claude-sonnet-4-6",
+        model: str = "claude-sonnet-5",
         api_key: str | None = None,
         shortlist: int = 20,
         client: object | None = None,
