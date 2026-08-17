@@ -131,6 +131,55 @@ class Chain:
         return len(self.relations)
 
 
+def alias_keys(title: str) -> list[str]:
+    """Every key a context title should be reachable under.
+
+    2Wiki's ``evidences`` name entities bare ("Polish-Russian War") while ``context``
+    titles carry a disambiguating qualifier ("Polish-Russian War (film)"). Matching on
+    the normalised full title alone silently drops the majority of chains, so titles are
+    also indexed under their de-qualified form.
+    """
+    keys = [normalise_entity(title)]
+    stripped = re.sub(r"\s*\([^)]*\)\s*$", "", title)
+    if stripped and stripped != title:
+        keys.append(normalise_entity(stripped))
+    return [k for k in dict.fromkeys(keys) if k]
+
+
+def build_entity_text(
+    dataset: RelationalDataset, name_fallback: bool = True
+) -> tuple[dict[str, str], int, int]:
+    """Entity -> descriptive text, with alias resolution.
+
+    Returns ``(entity_text, n_from_paragraph, n_from_name_only)``. When
+    ``name_fallback`` is set, an evidence entity with no paragraph in any context falls
+    back to its own surface name as its text. That keeps the chain scoreable and the
+    stalk is still content-derived, but it is a weaker signal, so the split is reported
+    rather than hidden -- family relations in 2Wiki share surnames, which a name-only
+    stalk can exploit.
+    """
+    from_paragraph: dict[str, str] = {}
+    for ex in dataset.examples:
+        for title, text in ex.context:
+            if not text:
+                continue
+            for key in alias_keys(title):
+                if len(text) > len(from_paragraph.get(key, "")):
+                    from_paragraph[key] = text
+
+    entity_text = dict(from_paragraph)
+    name_only = 0
+    if name_fallback:
+        for ex in dataset.examples:
+            for subject, _, obj in ex.evidences:
+                for surface in (subject, obj):
+                    key = normalise_entity(surface)
+                    if key and key not in entity_text:
+                        entity_text[key] = surface
+                        name_only += 1
+    return entity_text, len(from_paragraph), name_only
+
+
 def extract_chains(dataset: RelationalDataset) -> tuple[list[Chain], list[tuple[str, str, str]]]:
     """Gold chains and the full edge list from a dataset's evidence triples.
 
@@ -285,6 +334,8 @@ class SheafProbeReport:
     scores: list[FamilyScore]
     median_edges_per_relation: float = 0.0
     underdetermined_relations: int = 0
+    n_stalks_from_paragraph: int = 0
+    n_stalks_from_name_only: int = 0
 
     @property
     def degenerate(self) -> bool:
@@ -299,8 +350,19 @@ class SheafProbeReport:
         return self.median_edges_per_relation < self.dim or self.n_test_chains < 30
 
     @property
+    def noise_margin(self) -> float:
+        """Smallest AUC gap worth believing at this sample size.
+
+        Roughly two standard errors of an AUC estimated from ``n_test_chains`` gold
+        scores (``SE <= sqrt(0.25/n)``), so ``1/sqrt(n)``. Gaps below this are noise: at
+        n=1938 that is 0.023, which is why a fixed +0.01 threshold flips sign between
+        seeds and must not be used to declare a win.
+        """
+        return 1.0 / np.sqrt(self.n_test_chains) if self.n_test_chains else float("inf")
+
+    @property
     def verdict(self) -> str:
-        """The pre-registered decision rule, applied."""
+        """The pre-registered decision rule, applied against the noise floor."""
         table = {s.name: s.pooled_auc for s in self.scores}
         learned = table.get("learned", float("nan"))
         identity = table.get("identity", float("nan"))
@@ -312,16 +374,24 @@ class SheafProbeReport:
                 f"UNRELIABLE - insufficient evidence (median {self.median_edges_per_relation:.0f} "
                 f"training edges/relation vs dim {self.dim}; {self.n_test_chains} test chains). "
                 "Procrustes is underdetermined here, so any separation is overfitting. "
-                "Re-run on the full 2Wiki dev split, or lower --dim."
+                "Re-run on more data, or lower --dim."
             )
-        if learned <= placeholder + 0.01:
-            return "NEGATIVE - learned maps do not beat random placeholder maps"
-        if learned <= identity + 0.01:
+        margin = self.noise_margin
+        if learned - placeholder <= margin:
             return (
-                "NEGATIVE - learned maps do not beat the identity control; the residual "
-                "is reproducing endpoint embedding distance, not composition"
+                f"NEGATIVE - learned maps do not beat random placeholder maps by more "
+                f"than the noise floor ({margin:.3f})"
             )
-        return "POSITIVE - learned maps beat both the placeholder and the identity control"
+        if learned - identity <= margin:
+            return (
+                f"NEGATIVE - learned maps do not beat the identity control by more than "
+                f"the noise floor ({margin:.3f}); the residual is tracking endpoint "
+                "embedding distance, not composition"
+            )
+        return (
+            f"POSITIVE - learned maps beat both the placeholder and the identity control "
+            f"by more than the noise floor ({margin:.3f})"
+        )
 
 
 def run_sheaf_probe(
@@ -331,18 +401,16 @@ def run_sheaf_probe(
     seed: int = 0,
     test_fraction: float = 0.3,
     max_hops: int = 4,
+    name_fallback: bool = True,
 ) -> SheafProbeReport:
     """Score gold chains against corrupted chains on a held-out split."""
     rng = random.Random(seed)
     chains, all_edges = extract_chains(dataset)
     n_disconnected = len(dataset.examples) - len(chains)
 
-    entity_text: dict[str, str] = {}
-    for ex in dataset.examples:
-        for title, text in ex.context:
-            key = normalise_entity(title)
-            if text and len(text) > len(entity_text.get(key, "")):
-                entity_text[key] = text
+    entity_text, n_paragraph, n_name_only = build_entity_text(
+        dataset, name_fallback=name_fallback
+    )
     stalks = text_stalks(entity_text, dim=dim, seed=seed)
 
     # Keep only chains whose endpoints have stalks — otherwise there is nothing to score.
@@ -448,6 +516,8 @@ def run_sheaf_probe(
         scores=scores,
         median_edges_per_relation=median_density,
         underdetermined_relations=underdetermined,
+        n_stalks_from_paragraph=n_paragraph,
+        n_stalks_from_name_only=n_name_only,
     )
 
 
@@ -464,6 +534,8 @@ def to_markdown_sheaf_probe(report: SheafProbeReport) -> str:
         f"Evidence density: median {report.median_edges_per_relation:.0f} training "
         f"edges/relation ({report.underdetermined_relations} relations below dim "
         f"{report.dim}, i.e. underdetermined)",
+        f"Stalks: {report.n_stalks_from_paragraph} from paragraph text, "
+        f"{report.n_stalks_from_name_only} from entity name only (weaker signal)",
         "Test chains by hops: "
         + ", ".join(f"{h}-hop {n}" for h, n in report.hop_counts.items()),
         "Negatives built: "
@@ -484,5 +556,11 @@ def to_markdown_sheaf_probe(report: SheafProbeReport) -> str:
             + " | ".join(cells)
             + f" | {score.mean_gold_residual:.3f} |"
         )
-    lines += ["", f"**Verdict: {report.verdict}**"]
+    lines += [
+        "",
+        f"Noise floor on an AUC gap at this sample size: {report.noise_margin:.3f}. "
+        "Differences smaller than this are not evidence.",
+        "",
+        f"**Verdict: {report.verdict}**",
+    ]
     return "\n".join(lines)

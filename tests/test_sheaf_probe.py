@@ -12,9 +12,18 @@ import json
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 from cookix.eval import load_2wiki, run_sheaf_probe, text_stalks, to_markdown_sheaf_probe
-from cookix.eval.sheaf_probe import Chain, auc, corrupt, extract_chains, residual
+from cookix.eval.sheaf_probe import (
+    Chain,
+    alias_keys,
+    auc,
+    build_entity_text,
+    corrupt,
+    extract_chains,
+    residual,
+)
 
 FIXTURE = Path(__file__).parent / "fixtures" / "twowiki_sample.json"
 
@@ -129,6 +138,49 @@ def test_probe_report_renders_and_scores_all_three_map_families():
     assert "Sheaf residual discrimination probe" in text
     assert "Verdict:" in text
     assert text.isascii(), "report must be ASCII-safe for Windows consoles"
+
+
+def test_alias_keys_strips_a_disambiguating_qualifier():
+    """2Wiki evidences name entities bare; context titles carry a qualifier."""
+    keys = alias_keys("Polish-Russian War (film)")
+    assert "polish russian war film" in keys
+    assert "polish russian war" in keys
+    # A title with no qualifier yields exactly one key.
+    assert alias_keys("Xawery Zulawski") == ["xawery zulawski"]
+    # Only a *trailing* parenthetical is stripped.
+    assert len(alias_keys("Foo (bar) baz")) == 1
+
+
+def test_alias_resolution_recovers_chains_that_exact_matching_drops():
+    """The qualifier mismatch silently dropped most chains before this was handled."""
+    ds = load_2wiki(str(FIXTURE))
+    text, n_para, n_name = build_entity_text(ds, name_fallback=False)
+    # "Polish-Russian War (film)" is a context title; the evidence says the bare name.
+    assert "polish russian war" in text
+    assert n_para > 0 and n_name == 0
+
+
+def test_name_fallback_fills_entities_with_no_paragraph():
+    ds = load_2wiki(str(FIXTURE))
+    without = build_entity_text(ds, name_fallback=False)[0]
+    with_names, _, n_name = build_entity_text(ds, name_fallback=True)
+    assert len(with_names) >= len(without)
+    if n_name:
+        assert set(with_names) > set(without)
+
+
+def test_noise_margin_shrinks_with_sample_size_and_gates_the_verdict():
+    """A gap under the noise floor must not be reported as POSITIVE."""
+    ds = load_2wiki(str(FIXTURE))
+    report = run_sheaf_probe(ds, dim=16, seed=0)
+    # 1/sqrt(n): small samples get a wide band, so tiny gaps cannot claim a win.
+    assert report.noise_margin == pytest.approx(1.0 / np.sqrt(report.n_test_chains))
+    assert report.noise_margin > 0.05, "fixture is tiny; band must be wide"
+
+    table = {s.name: s.pooled_auc for s in report.scores}
+    gap = table["learned"] - max(table["identity"], table["placeholder"])
+    if gap <= report.noise_margin:
+        assert "POSITIVE" not in report.verdict
 
 
 def test_probe_is_deterministic():
