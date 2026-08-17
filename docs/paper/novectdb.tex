@@ -1,0 +1,826 @@
+% NoVectDB / CookiX --- corrected edition.
+%
+% This supersedes the February 2026 preprint (docs/paper.pdf). Every quantitative
+% claim below is produced by a command in this repository and is named next to the
+% number. See docs/paper/CHANGES.md for the itemised list of what was wrong in the
+% preprint and why each change was made.
+%
+% Build:  pdflatex novectdb && bibtex novectdb && pdflatex novectdb && pdflatex novectdb
+
+\documentclass[11pt]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{booktabs}
+\usepackage{algorithm}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage[margin=1in]{geometry}
+\usepackage{xcolor}
+
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{corollary}[theorem]{Corollary}
+\newtheorem{lemma}[theorem]{Lemma}
+\theoremstyle{definition}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{remark}[theorem]{Remark}
+
+\newcommand{\cmd}[1]{\texttt{\small #1}}
+
+\title{NoVectDB: Typed Relational Retrieval as a Complement to Vector Search\\
+\large CookiX: A Reference Implementation, and an Honest Account of What It Does
+and Does Not Buy}
+
+\author{Ahmed Hafdi\\Independent Research, CookiX Project}
+
+\date{Corrected edition, August 2026\\
+\small\textcolor{gray}{Supersedes the February 2026 preprint. See
+Section~\ref{sec:corrections}.}}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+Retrieval-augmented generation grounds language models in external knowledge
+predominantly through vector similarity. That works well for topical lookup but
+degrades on \emph{relational} questions --- ones whose answer depends on a typed,
+directed connection (\emph{prevents}, \emph{causes}, \emph{depends on}) rather than on
+proximity --- and it returns a scalar distance in place of a justification. We
+describe \textbf{NoVectDB}, a design position rather than a replacement: retrieval
+substrates should carry typed directed edges alongside vectors, and should return the
+\emph{path} that justifies an answer. We define the Knowledge Object
+$K=(V,E,\mathcal{T},\mathcal{S})$, give the composite distance over the resulting
+graph, and present \textbf{CookiX}, an open-source single-node reference
+implementation in pure Python.
+
+We report what we measured, including where it loses. On 2WikiMultiHopQA
+\cite{ho2020constructing}, typed multi-hop traversal reaches hits@10 $0.580$ against
+Okapi BM25's \cite{robertson2009probabilistic} $0.386$
+($+50\%$ relative) \emph{under oracle entity linking}. Without the oracle, a
+surface-form linker achieves $59.5\%$ link accuracy and end-to-end hits@10 $0.378$
+--- \emph{parity with, not victory over}, BM25's $0.386$. Entity linking and triple
+extraction, not traversal, are the binding constraints: measured per-edge extraction
+recall is $0.444$, which compounds to $\approx 4\%$ survival for a four-hop chain.
+
+Both exploratory layers fail to earn their place so far. The topological signature
+($\mathcal{T}$) never improves any retrieval metric we measure. For the sheaf layer
+($\mathcal{S}$) we introduce a discriminative test --- does the composition residual
+rank a gold evidence chain below a corrupted one on held-out data? --- and report a
+\textbf{negative result} across nine configurations on 2WikiMultiHopQA: learned
+orthogonal restriction maps do not separate chains better than an identity-map control
+by more than sampling noise. We also identify why: the residual is blind to which of
+several genuine paths connects two endpoints, and that is exactly the discrimination
+retrieval re-ranking requires. We state plainly that no dense vector database has yet
+been benchmarked against CookiX, and that the earlier preprint's comparative tables
+were not reproducible.
+\end{abstract}
+
+\noindent\textbf{Keywords:} knowledge graphs, multi-hop retrieval, retrieval-augmented
+generation, explainable retrieval, sheaf theory, topological data analysis, negative
+results
+
+\section{Introduction}
+
+The dominant pattern for grounding language models in external knowledge is
+retrieval-augmented generation \cite{lewis2020retrieval}, which relies largely on
+embedding text into $\mathbb{R}^n$ and retrieving neighbours by cosine or Euclidean
+distance. This is effective for topical retrieval. It is weaker for three classes of
+question, and it is those we address.
+
+\subsection{Motivating example: the umbrella problem}
+
+Consider five concepts: \emph{raincoat}, \emph{rain}, \emph{water}, \emph{umbrella},
+\emph{storm}. A sentence transformer maps them to points that cluster tightly. The
+query ``what prevents rain from reaching the coat?'' retrieves all five with similar
+scores. The correct answer, \emph{umbrella}, depends on a directed edge
+\[
+  \textit{umbrella} \xrightarrow{\ \textit{prevents}\ } \textit{rain}
+  \xrightarrow{\ \textit{causes}\ } \textit{wet\_coat},
+\]
+and no ranking by a \emph{symmetric distance} can encode the verb ``prevents''
+(Proposition~\ref{prop:gap}).
+
+We are careful about the scope of that statement, because the February 2026 preprint
+was not. It is a limitation of \emph{distance-ranked} retrieval, not of vector
+representations as such. Knowledge-graph embedding methods with \emph{asymmetric
+scoring functions} --- TransE \cite{bordes2013translating}, ComplEx
+\cite{trouillon2016complex}, RotatE \cite{sun2019rotate} --- were designed precisely to
+represent directed relations in vector space, and they are not refuted by anything
+here. The gap we exploit is between typed traversal and \emph{cosine-similarity
+retrieval over text embeddings}, which is what production RAG stacks actually deploy.
+
+\subsection{Contributions}
+
+\begin{enumerate}
+  \item We formalise the NoVectDB data model (Section~\ref{sec:paradigm}): Knowledge
+  Objects, the graph substrate, and a composite distance whose every term is
+  ablatable.
+  \item We give the retrieval pipeline and its complexity
+  (Section~\ref{sec:cookix}), as implemented.
+  \item We report reproducible benchmarks (Section~\ref{sec:experiments}) on a
+  synthetic corpus and on 2WikiMultiHopQA, separating the \emph{engine under oracle
+  linking} from the \emph{end-to-end system}, and reporting the latter as parity
+  rather than a win.
+  \item We quantify extraction as the binding constraint on multi-hop accuracy
+  (Section~\ref{sec:extraction}), including the compounding model.
+  \item We report a \textbf{negative result} for the sheaf layer
+  (Section~\ref{sec:sheaf-negative}) with a diagnosis of the mechanism, and we
+  withdraw the preprint's suggestion that the exotic layers were contributing.
+  \item We document the corrections relative to the preprint
+  (Section~\ref{sec:corrections}), including the removal of comparative tables that
+  could not be reproduced.
+\end{enumerate}
+
+\section{Where distance-ranked retrieval struggles}
+
+\subsection{Concentration of measure, and how much it actually matters}
+
+\begin{theorem}[Distance concentration \cite{vershynin2018high}]
+Let $X_1,\dots,X_m$ be i.i.d.\ random vectors drawn uniformly from the unit ball
+$B^n(0,1)\subset\mathbb{R}^n$. Then for $i\neq j$,
+\[
+  \Pr\!\left[\left|\,\|X_i-X_j\| - \sqrt{2}\,\right| > \varepsilon\right]
+  \;\le\; 2\exp\!\left(-c\,n\varepsilon^4\right),
+\]
+for an absolute constant $c>0$.
+\end{theorem}
+
+\begin{remark}[Honest scope --- revised]
+\label{rem:concentration}
+The preprint presented this as a fundamental limitation of vector retrieval. That
+overstates it, and we retract the framing. The theorem concerns vectors drawn
+\emph{uniformly from a ball}; learned text embeddings are strongly anisotropic and
+concentrate near low-dimensional manifolds, which is why cosine retrieval remains
+discriminative at $n=768$--$3072$ in practice. Concentration of measure is an
+asymptotic caution about isotropic data, not the failure mode practitioners observe.
+The argument in Section~\ref{sec:semantic-gap} does not depend on it, and it is the
+argument we rely on.
+\end{remark}
+
+\subsection{The semantic gap: a symmetric distance cannot encode an asymmetric relation}
+\label{sec:semantic-gap}
+
+\begin{definition}[Semantic gap]
+Let $\phi:\mathcal{D}\to\mathbb{R}^n$ be an embedding of a corpus $\mathcal{D}$, and
+let $\rho$ be a target relation (e.g.\ \emph{causes}, \emph{contradicts}). The
+embedding exhibits a \emph{semantic gap} with respect to $\rho$ if there exist
+$a,b,c\in\mathcal{D}$ with
+\[
+  \rho(a,b)=\text{true},\quad \rho(a,c)=\text{false},\quad
+  \|\phi(a)-\phi(b)\| \;\ge\; \|\phi(a)-\phi(c)\|.
+\]
+\end{definition}
+
+\begin{proposition}[Scope-corrected]
+\label{prop:gap}
+Let $d$ be any metric on $\mathbb{R}^n$ and let retrieval rank candidates by
+$d(\phi(a),\cdot)$. For any non-symmetric relation $\rho$ there exist corpora on which
+this ranking exhibits a semantic gap.
+\end{proposition}
+
+\begin{proof}
+A non-symmetric $\rho$ distinguishes the ordered pairs $(a,b)$ and $(b,a)$, whereas
+any metric satisfies $d(x,y)=d(y,x)$. A ranking that is a function of $d$ alone
+therefore assigns the same score to both orderings and cannot separate them.
+\end{proof}
+
+\begin{remark}
+Proposition~\ref{prop:gap} is deliberately weaker than the preprint's version, which
+asserted a gap for \emph{any} embedding. That is false as stated: an asymmetric
+\emph{scoring function} over embeddings (TransE, RotatE, ComplEx) is not a metric and
+escapes the argument. What survives --- and what motivates this work --- is that
+\emph{metric-ranked} retrieval, the deployed default, cannot represent direction.
+\end{remark}
+
+\subsection{Opacity}
+
+Vector retrieval returns a scalar. There is no path and no typed connection, so when a
+RAG system answers incorrectly, attributing the error to a retrieval decision requires
+inspecting inner products. Returning the justifying path is the capability we consider
+most defensible, and Section~\ref{sec:experiments} reports it as
+\texttt{path\_match}.
+
+\section{The NoVectDB data model}
+\label{sec:paradigm}
+
+NoVectDB stands for \emph{Not Only Vector Database}, after NoSQL: vectors are one tool
+among several.
+
+\begin{definition}[Knowledge Object]
+A Knowledge Object is a quadruple $K=(V,E,\mathcal{T},\mathcal{S})$:
+\begin{itemize}
+  \item $V\in\mathbb{R}^n$ (optional): an embedding or content signature.
+  \item $E=\{(r_i,K_i,w_i)\}$: typed, directed, weighted edges, with $r_i$ drawn from
+  an extensible vocabulary $\mathcal{R}=\{\textit{causes}, \textit{is\_a},
+  \textit{part\_of}, \textit{prevents}, \textit{contradicts},\dots\}$ carrying
+  algebraic properties (symmetry, transitivity, inverse).
+  \item $\mathcal{T}\in\mathbb{R}^m$ (optional, \emph{unvalidated}): a topological
+  signature from persistent homology of the local neighbourhood.
+  \item $\mathcal{S}$ (optional, \emph{negative result}): a sheaf stalk with linear
+  restriction maps per edge.
+\end{itemize}
+$V$ is optional: pure topological--relational storage is a valid configuration.
+\end{definition}
+
+\begin{definition}[Composite distance]
+\label{def:distance}
+For Knowledge Objects $K_a,K_b$,
+\begin{equation}
+  d(K_a,K_b) \;=\; \alpha\cdot d_{\mathrm{geo}}(a,b)
+  \;+\; \beta\cdot\bigl(1-\mathrm{TVS}(\mathcal{T}_a,\mathcal{T}_b)\bigr)
+  \;+\; \gamma\cdot\lVert \mathcal{S}_a \circ_\pi \mathcal{S}_b \rVert,
+  \label{eq:distance}
+\end{equation}
+with $\alpha+\beta+\gamma=1$, where $d_{\mathrm{geo}}$ is the minimum-weight path
+distance, $\mathrm{TVS}$ compares persistence signatures, and the third term is the
+sheaf composition residual along path $\pi$.
+\end{definition}
+
+Setting $\beta=\gamma=0$ recovers pure typed traversal. Every result in
+Section~\ref{sec:experiments} is reported per ablation, and on our measurements
+$\beta,\gamma>0$ never helps.
+
+\section{Exploratory layer I: topological signatures}
+
+\begin{definition}[Topological signature]
+For a Knowledge Object $K$ with $r$-hop neighbourhood $N_r(K)$, build the
+Vietoris--Rips complex on the shortest-path distance matrix using edge weights as
+filtration values, and set
+$\mathcal{T}(K)=\mathrm{Vectorise}\bigl(\mathrm{Barcode}(\mathrm{VR}(N_r(K)))\bigr)$.
+\end{definition}
+
+\begin{definition}[Topological vector similarity]
+$\mathrm{TVS}(\mathcal{T}_a,\mathcal{T}_b)=\exp(-\lambda\,W_2(\mathrm{Dgm}_a,
+\mathrm{Dgm}_b))$ for bandwidth $\lambda>0$ and 2-Wasserstein distance $W_2$
+\cite{edelsbrunner2010computational}.
+\end{definition}
+
+\begin{remark}[Status: no measured benefit]
+\label{rem:topo-status}
+Across every benchmark in Section~\ref{sec:experiments}, enabling $\mathcal{T}$
+changes no retrieval metric outside noise. The layer remains in the implementation
+because it is ablatable and cheap to leave switched off, not because we have evidence
+for it. Signatures are computed from the full neighbourhood distance matrix; the
+preprint described a landmark/witness construction, which is not what is implemented.
+\end{remark}
+
+\section{Exploratory layer II: sheaf composition}
+\label{sec:sheaf}
+
+\begin{definition}[Cellular sheaf \cite{curry2014sheaves,hansen2019toward}]
+A cellular sheaf $\mathcal{F}$ on a directed graph $G=(V,E)$ assigns a vector space
+(\emph{stalk}) $\mathcal{F}(v)\cong\mathbb{R}^{d}$ to each vertex and a linear
+\emph{restriction map} to each edge. In CookiX a stalk encodes an object's local
+semantic frame and a typed edge's restriction map encodes how meaning transforms across
+that relation.
+\end{definition}
+
+\begin{definition}[Composition residual]
+For a path $\pi=(v_0,e_1,v_1,\dots,e_k,v_k)$, the composed map is
+$S_\pi=\mathcal{F}_{e_k}\circ\cdots\circ\mathcal{F}_{e_1}$ and the residual is
+\begin{equation}
+  \mathrm{res}(\pi) \;=\; \lVert S_\pi(x_{v_0}) - x_{v_k}\rVert.
+  \label{eq:residual}
+\end{equation}
+The intended reading is that a low residual indicates a coherent chain.
+\end{definition}
+
+\begin{remark}[Structural blindness]
+\label{rem:blind}
+Equation~\eqref{eq:residual} reads only the source stalk, the relation sequence, and
+the target stalk. Intermediate vertices never enter it. The residual therefore
+\emph{cannot} distinguish two paths that share endpoints and relation sequence, and as
+Section~\ref{sec:sheaf-negative} shows empirically, it does not distinguish paths that
+share endpoints with a \emph{different} relation sequence either. This is a property of
+the definition, not of a particular fit.
+\end{remark}
+
+\section{Retrieval-theoretic analysis}
+\label{sec:theory}
+
+\begin{definition}[Relational query]
+A relational query $q=(K_{\mathrm{start}},\rho_1,\dots,\rho_k)$ seeks objects reachable
+from $K_{\mathrm{start}}$ along a chain of typed relations.
+\end{definition}
+
+\begin{proposition}[Conditional advantage --- restated and weakened]
+\label{prop:conditional}
+Let $\mathrm{Prec}_V(q)$ be the precision@$k$ of metric-ranked vector retrieval and
+$\mathrm{Prec}_N(q)$ that of typed traversal, for a query of hop count $h$. Suppose
+each required edge is present and correctly typed in the graph independently with
+probability $p$, and the head entity is correctly identified with probability $\ell$.
+Then
+\begin{equation}
+  \mathrm{Prec}_N(q) \;\lesssim\; \ell \cdot p^{\,h},
+  \label{eq:compounding}
+\end{equation}
+and traversal outperforms metric-ranked retrieval only when
+$\ell\,p^{\,h} > \mathrm{Prec}_V(q)$.
+\end{proposition}
+
+\begin{proof}[Sketch]
+Traversal recovers the target only if the anchor is correct and every hop's edge is
+present and correctly typed; independence gives the product. Correct traversal is
+precision~$1.0$ for single-hop typed lookup, so the bound is tight at $h=1$,
+$\ell=p=1$.
+\end{proof}
+
+\begin{remark}[The preprint claimed dominance; the data refutes it]
+\label{rem:dominance-retracted}
+The preprint asserted a theorem that NoVectDB ``strictly dominates'' vector-only
+retrieval for relational queries. We withdraw that claim. As
+Proposition~\ref{prop:conditional} makes explicit, the advantage is
+\emph{conditional} on $\ell$ and $p$, and at our measured values
+($p\approx0.444$ from Section~\ref{sec:extraction}, $\ell\approx0.595$ from
+Section~\ref{sec:endtoend}) the inequality \emph{fails}: two-hop survival is
+$0.595\times0.444^2\approx0.117$. This is consistent with the end-to-end result, where
+CookiX reaches parity with BM25 rather than beating it. A conditional inequality whose
+condition our own measurements violate is not a dominance result, and presenting it as
+one was an error.
+\end{remark}
+
+\begin{corollary}[Dimension independence]
+Because $d_{\mathrm{geo}}$ is defined on a discrete graph and $\mathrm{TVS}$ derives
+from topological invariants, neither depends on an ambient embedding dimension.
+\end{corollary}
+
+\begin{remark}
+This is a categorical difference, not a demonstrated benefit; given
+Remark~\ref{rem:concentration} it should not be read as an advantage over deployed
+vector retrieval.
+\end{remark}
+
+\section{CookiX: architecture as implemented}
+\label{sec:cookix}
+
+CookiX is a document-oriented embedded library. The description below is of the code in
+this repository; where the preprint described a different system, we say so.
+
+\begin{itemize}
+  \item \textbf{Language.} Pure Python (3.10+), NumPy and NetworkX as the only core
+  dependencies. \emph{The preprint described a Rust core with Python bindings. No Rust
+  exists in the implementation.} A Rust hot-path core remains future work.
+
+  \item \textbf{Ingestor.} A rule-based keyword extractor (deterministic,
+  dependency-free) or an LLM-backed extractor via API. \emph{The preprint described a
+  local 3B-parameter instruction model; that is not what is implemented.}
+
+  \item \textbf{Storage.} Three interchangeable backends behind one interface, verified
+  by a shared parity test battery: an in-memory NetworkX store; a crash-safe durable
+  store in pure Python (write-ahead log with per-record CRC for torn-write tolerance,
+  atomic snapshots via temp-file rename, single-\texttt{fsync} transactions, re-entrant
+  write lock); and an embedded Kùzu property graph. \emph{The preprint described a
+  memory-mapped adjacency list with $O(1)$ amortised typed lookup inspired by Rust
+  embedded stores; that is not what is implemented.}
+
+  \item \textbf{TopoIndex.} Approximate nearest-neighbour search over persistence
+  signatures by \textbf{cosine LSH}, with an exact fallback and a recall measure.
+  \emph{The preprint described an adaptation of HNSW \cite{malkov2018efficient} to
+  persistence-diagram distances; that is not what is implemented.}
+
+  \item \textbf{Query engine.} The pipeline of Algorithm~\ref{alg:pipeline}.
+
+  \item \textbf{Interfaces.} An embedded Python API, an HTTP server with API-key auth,
+  role separation, rate limiting, resource caps, read-only mode, health probes and
+  Prometheus metrics, and a dependency-free typed client over a versioned wire API.
+\end{itemize}
+
+\begin{algorithm}
+\caption{NoVectDB retrieval pipeline}
+\label{alg:pipeline}
+\begin{enumerate}
+  \item $I \leftarrow \textsc{IntentParse}(q)$ \hfill (anchor / relation / target)
+  \item $S_0 \leftarrow \textsc{DeterministicLookup}(G, I)$ \hfill (exact typed-edge
+  match; inverse relations resolved virtually)
+  \item \textbf{if} a bare relation query \textbf{then return} $S_0[{:}k]$
+  \item $S_1 \leftarrow \textsc{GeodesicSearch}(G, I.\mathrm{anchor}, h_{\max})$
+  \hfill (settle-once Dijkstra, early exit on target)
+  \item $S_2 \leftarrow \textsc{Rank}(S_1, d)$ \hfill (Eq.~\eqref{eq:distance}, terms
+  enabled per ablation mode)
+  \item \textbf{return} $S_2[{:}k]$
+\end{enumerate}
+\end{algorithm}
+
+\begin{proposition}[Query complexity]
+The pipeline runs in $O(|V_{\mathrm{local}}| + |E_{\mathrm{local}}|\log
+|E_{\mathrm{local}}|)$, where the local subscripts denote the explored frontier ---
+bounded by degree and hop limit, not by total object count.
+\end{proposition}
+
+\section{Experiments}
+\label{sec:experiments}
+
+Every number in this section is produced by a named command in this repository, with a
+fixed seed. We report the ablation modes separately throughout.
+
+\subsection{Synthetic relational corpus}
+
+\cmd{cookix eval --seed 0 --worlds 40 --k 5}. The corpus is built so that each
+entity's text describes the entity itself, never its relations, and entities within a
+world share a topical adjective --- so a content retriever genuinely retrieves the
+right neighbourhood, while the relational answer lives only in the typed edges. 240
+documents, 160 queries (single-hop forward, single-hop inverse, multi-hop,
+contradiction).
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lrrrrrr}
+\toprule
+retriever & hits@1 & hits@5 & P@5 & R@5 & MRR & path\_acc \\
+\midrule
+random           & 0.006 & 0.019 & 0.004 & 0.019 & 0.010 & 0.000 \\
+lexical-tfidf    & 0.250 & 0.750 & 0.150 & 0.750 & 0.375 & 0.000 \\
+cookix-graph     & 1.000 & 1.000 & 0.200 & 1.000 & 1.000 & 1.000 \\
+cookix-topo      & 1.000 & 1.000 & 0.200 & 1.000 & 1.000 & 1.000 \\
+cookix-sheaf     & 1.000 & 1.000 & 0.200 & 1.000 & 1.000 & 1.000 \\
+cookix-reasoning & 1.000 & 1.000 & 0.200 & 1.000 & 1.000 & 1.000 \\
+\bottomrule
+\end{tabular}
+\caption{Synthetic corpus, seed 0. CookiX saturates; the exotic layers have no
+headroom to demonstrate anything, and we claim nothing from their tying.}
+\end{table}
+
+\begin{remark}[What this table is worth]
+This is a corpus we designed, and saturation at $1.000$ is evidence that the
+implementation does what it is built to do --- not evidence about the world. The
+lexical baseline reaching $R@5=0.75$ while scoring $\text{hits@}1=0.25$ and
+$\text{path\_acc}=0$ is the informative part: content similarity finds the right
+neighbourhood and cannot pick the relationally correct entity or produce a path.
+\end{remark}
+
+\subsection{2WikiMultiHopQA under oracle entity linking}
+
+\cmd{cookix eval --dataset 2wiki --path dev.json --k 10}. One global knowledge graph is
+built from every example's gold evidence triples, so traversal faces real distractor
+edges from thousands of other questions. Baseline is Okapi BM25 over the same
+paragraphs. First 2{,}000 dev examples, 1{,}802 evaluable.
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lrrr}
+\toprule
+retriever & hits@10 & MRR & path\_match \\
+\midrule
+BM25 (strong lexical) & 0.386 & 0.239 & n/a \\
+cookix-graph          & \textbf{0.580} & 0.282 & 0.579 \\
+cookix-reasoning      & 0.580 & 0.283 & 0.579 \\
+\bottomrule
+\end{tabular}
+\caption{Oracle entity linking: the question's head entity is given, so this measures
+the reasoning engine in isolation. \texttt{path\_match} is unavailable for BM25 by
+construction --- it returns passages, not paths.}
+\end{table}
+
+This is a real result in a recognised setting, and it is the strongest evidence for the
+typed-traversal core. It is \emph{not} an end-to-end open-domain number, and we do not
+present it as one.
+
+\subsection{Dropping the oracle: the end-to-end result}
+\label{sec:endtoend}
+
+\cmd{cookix eval --dataset 2wiki --no-oracle --linker \{surface,bm25\}}.
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lrrr}
+\toprule
+anchor source & link accuracy & CookiX hits@10 & MRR \\
+\midrule
+oracle (given)              & 100\% & 0.580 & 0.282 \\
+surface linker              & \textbf{59.5\%} & \textbf{0.378} & 0.183 \\
+BM25 linker (context match) & 50.1\% & 0.340 & 0.168 \\
+\midrule
+BM25 \emph{retriever} (no linking needed) & --- & 0.386 & 0.239 \\
+\bottomrule
+\end{tabular}
+\caption{End-to-end, same 2{,}000 examples. A correct-signal linker lifts CookiX from
+below BM25 to parity. It is not a win.}
+\end{table}
+
+Stated without spin: the engine dominates when linked correctly; matching entity names
+against the question beats matching paragraph content ($50.1\%\to59.5\%$ link accuracy,
+$0.340\to0.378$ hits@10); and that lifts CookiX from \emph{losing} to \emph{parity}
+($0.378$ vs $0.386$) while still returning a reasoning path. Roughly $40\%$ of
+questions still begin from the wrong anchor and cannot recover. An LLM-assisted linker
+is implemented and unit-tested; \emph{we report no number for it because we have not
+run the keyed benchmark.}
+
+\subsection{Extraction is the binding constraint}
+\label{sec:extraction}
+
+\cmd{cookix eval --extraction}. Rule-based extractor against 16 hand-annotated
+sentences (18 gold triples):
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lrrrr}
+\toprule
+extractor & precision & recall & F1 & relation accuracy \\
+\midrule
+rule-based & 0.615 & 0.444 & 0.516 & 1.000 \\
+\bottomrule
+\end{tabular}
+\caption{Relation \emph{typing} is perfectly reliable; free-text \emph{coverage} is the
+bottleneck.}
+\end{table}
+
+Projecting per-edge recall through Eq.~\eqref{eq:compounding} with $\ell=1$:
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lrrrr}
+\toprule
+& 1-hop & 2-hop & 3-hop & 4-hop \\
+\midrule
+rule-based & 0.444 & 0.198 & 0.088 & 0.039 \\
+\bottomrule
+\end{tabular}
+\caption{A four-hop chain survives about $4\%$ of the time. This is the ceiling on
+multi-hop reasoning, and it is why extraction is a first-class swappable component.}
+\end{table}
+
+\subsection{A negative result for the sheaf layer}
+\label{sec:sheaf-negative}
+
+\cmd{cookix eval --sheaf-probe --path dev.json --dim 32}.
+
+Our earlier sheaf evaluation learned restriction maps on synthetic data
+\emph{generated to be sheaf-consistent} and reported a $48$--$62\%$ residual drop. That
+experiment is circular: it confirms that orthogonal Procrustes recovers a linear map
+when a linear map produced the data, and says nothing about retrieval signal. We
+replace it with a discriminative test.
+
+\paragraph{Design.} On held-out 2WikiMultiHopQA chains, we ask whether the residual
+ranks a gold evidence chain below a corrupted one. Stalks are derived from entity
+\emph{text} (TF--IDF, randomly projected, L2-normalised) rather than from an entity-id
+hash. Corruptions vary only what Eq.~\eqref{eq:residual} can see: a swapped relation
+label, a swapped source or target, a shuffled relation order, and a \emph{detour} --- a
+genuine alternative path between the same endpoints. Three map families are scored:
+\emph{placeholder} (the shipped random orthogonal maps; the null), \emph{identity}
+(every map $I$, collapsing the residual to endpoint distance $\lVert x_a-x_b\rVert$ and
+ignoring relations entirely --- the decisive control), and \emph{learned} (orthogonal
+Procrustes fitted on training-split edges only, with every test-chain triple withheld).
+The decision rule was fixed before running: \emph{learned} must beat \emph{both}
+controls by more than the sampling-noise floor $1/\sqrt{n}$.
+
+\paragraph{Result.} 12{,}576 dev examples yield 6{,}459 connected chains; 1{,}938 are
+held out and scored, with 26{,}126 training edges over 34 relations (median 92
+edges/relation against $\dim=32$, so the fit is not underdetermined). Noise floor
+$0.023$.
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lrrrrrr}
+\toprule
+maps & pooled AUC & detour & rel.\ swap & shuffle & src.\ swap & tail swap \\
+\midrule
+placeholder        & 0.509 & 0.498 & 0.504 & 0.524 & 0.502 & 0.508 \\
+identity (control) & 0.530 & 0.463 & 0.500 & 0.523 & 0.563 & 0.536 \\
+learned            & 0.552 & 0.481 & 0.550 & 0.530 & 0.565 & 0.561 \\
+\bottomrule
+\end{tabular}
+\caption{AUC $=\Pr(\text{gold residual} < \text{corrupted residual})$; $0.5$ is chance.
+\emph{learned} $-$ \emph{identity} $=0.022$, below the $0.023$ noise floor.}
+\end{table}
+
+Across nine configurations ($\dim\in\{8,16,32\}$, three seeds) the
+\emph{learned}\,--\,\emph{identity} gap ranges from $+0.004$ to $+0.018$ and is
+\textbf{below the noise floor in all nine}. We therefore report a negative result: on
+real multi-hop data, learned linear restriction maps over lexical stalks do not
+discriminate coherent from corrupted reasoning chains better than endpoint distance.
+
+\paragraph{Diagnosis.} The \emph{detour} column is $0.481$ --- chance. The residual
+cannot tell a gold chain from another genuine path between the same endpoints. This
+explains mechanically why $\gamma>0$ never improves retrieval in our benchmarks:
+retrieval candidates \emph{are} all real paths in the graph, i.e.\ all detours, which
+is precisely the discrimination the residual lacks (cf.\ Remark~\ref{rem:blind}).
+
+\paragraph{What remains open.} Stalks here are lexical projections, not neural
+sentence embeddings, and the maps are linear and closed-form rather than jointly
+learned as in neural sheaf diffusion \cite{bodnar2022neural}. Those are the substantive
+untried variables. We claim only what we tested: the linear-maps-over-lexical-stalks
+formulation does not work. The burden of proof now sits with the neural variant.
+
+\subsection{Performance and scale}
+
+\cmd{cookix eval --perf}, 240 documents, 160 queries $\times$ 3 repeats,
+single-threaded: median $0.06$\,ms graph-only, $0.07$\,ms with all layers
+($\approx13{,}000$ vs $\approx6{,}500$ q/s). \cmd{cookix eval --scale}, random typed
+graph, out-degree 4, four-hop traversals:
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lrrrr}
+\toprule
+objects & ingest & peak memory & median query & p95 \\
+\midrule
+1{,}000  & 0.08\,s & 3\,MB   & 1.5\,ms & 2.8\,ms \\
+10{,}000 & 0.9\,s  & 30\,MB  & 2.0\,ms & 3.1\,ms \\
+50{,}000 & 6.4\,s  & 155\,MB & 2.2\,ms & 6.1\,ms \\
+\bottomrule
+\end{tabular}
+\caption{Latency stays near-flat across a $50\times$ increase in graph size, because
+traversal cost is bounded by the local reachable frontier. Single-threaded pure Python
+on one machine.}
+\end{table}
+
+\cmd{cookix loadtest}: 8 concurrent clients against the real HTTP server over a
+10{,}000-object graph sustained $\approx130$ req/s with $0$ errors in $2{,}613$
+requests (median $59$\,ms, p99 $102$\,ms) and non-monotonic memory. The largest graph
+measured is $5\times10^4$ objects; \emph{the preprint claimed $10^5$.}
+
+\subsection{No dense-retrieval baseline has been run}
+\label{sec:no-vector-baseline}
+
+We state this explicitly because the preprint did not. CookiX has been compared against
+a random floor, TF--IDF cosine, and Okapi BM25. It has \textbf{not} been compared
+against a dense embedding retriever, Chroma, Pinecone, or GraphRAG. The preprint
+contained a table of such comparisons; those numbers are not reproducible from this
+repository and are withdrawn (Section~\ref{sec:corrections}). Running a dense baseline
+is the single most important outstanding experiment.
+
+\section{Corrections relative to the February 2026 preprint}
+\label{sec:corrections}
+
+We list these explicitly rather than silently revising, because the preprint was
+circulated.
+
+\begin{enumerate}
+  \item \textbf{Implementation language.} The preprint described a Rust core with
+  Python bindings, a memory-mapped adjacency list, and $O(1)$ amortised typed edge
+  lookup. The implementation is pure Python over NetworkX with pickle snapshots and a
+  write-ahead log. \emph{Withdrawn.}
+
+  \item \textbf{Comparative benchmark table.} The preprint reported precision@5 against
+  Chroma ($0.437$), Pinecone ($0.457$) and GraphRAG ($0.583$) versus CookiX ($0.830$),
+  and a ``$2.4\times$ improvement''. No such experiment is reproducible from this
+  repository: no dense-vector or GraphRAG baseline exists in the evaluation suite, and
+  the described corpus (500 queries over industrial pipe specifications, medical
+  ontologies and legal case chains) does not exist. \emph{Withdrawn in full}; replaced
+  by Section~\ref{sec:experiments} and the explicit disclosure in
+  Section~\ref{sec:no-vector-baseline}.
+
+  \item \textbf{Latency comparison.} The preprint's $100{,}000$-object latency table
+  against Chroma and Pinecone is likewise not reproducible. \emph{Withdrawn}; replaced
+  by measured single-system figures to $5\times10^4$ objects.
+
+  \item \textbf{Dominance theorem.} Restated as the conditional
+  Proposition~\ref{prop:conditional}. At measured extraction and linking accuracy the
+  condition fails, consistent with the parity result of
+  Section~\ref{sec:endtoend}. \emph{Claim of strict dominance withdrawn.}
+
+  \item \textbf{Semantic-gap scope.} The preprint's proposition asserted a gap for any
+  embedding; it holds for \emph{metric-ranked} retrieval only, and does not apply to
+  asymmetric scoring functions such as TransE, ComplEx or RotatE, which are now cited.
+  \emph{Scope corrected.}
+
+  \item \textbf{Concentration of measure.} Demoted from a fundamental limitation to an
+  asymptotic caution about isotropic data (Remark~\ref{rem:concentration}), since
+  learned embeddings are anisotropic.
+
+  \item \textbf{TopoIndex.} Cosine LSH, not an HNSW adaptation to persistence-diagram
+  distances. \emph{Corrected.}
+
+  \item \textbf{Ingestor.} Rule-based or API-backed extraction, not a local
+  3B-parameter model. Topological signatures use the full neighbourhood distance
+  matrix, not a landmark/witness complex. \emph{Corrected.}
+
+  \item \textbf{Scale claim.} $5\times10^4$ objects measured, not $10^5$.
+  \emph{Corrected.}
+
+  \item \textbf{Category-theoretic section.} The preprint asserted that the knowledge
+  category has all finite limits and colimits whenever the graph is finite and
+  connected, and concluded that every finite-diagram query has a well-defined answer.
+  That is false --- a free category on a finite graph generally lacks both --- and the
+  section carried no operational content. \emph{Removed.}
+
+  \item \textbf{Sheaf layer.} The preprint deferred learning the maps to future work
+  and implied prospective benefit. We now report a negative discriminative result
+  (Section~\ref{sec:sheaf-negative}) and the structural reason for it.
+
+  \item \textbf{Topological layer.} Reported as measured: no effect on any retrieval
+  metric (Remark~\ref{rem:topo-status}).
+\end{enumerate}
+
+\section{Discussion}
+
+\paragraph{When to use what.} For fuzzy semantic search over unstructured text, use a
+vector database. For a production graph database at scale, use Neo4j or Kùzu. For
+LLM-grounded summarisation over a corpus graph, use GraphRAG \cite{edge2024local}. The
+niche we can defend is narrow: \emph{embedded, explainable, typed multi-hop retrieval
+where the justifying path is part of the answer}, over data that is already relational
+or can be made so reliably.
+
+\paragraph{The compounding problem.} Equation~\eqref{eq:compounding} is the honest
+centre of this paper. Traversal accuracy is multiplicative in extraction and linking
+accuracy, whereas lexical and dense retrieval degrade gracefully. Traversal from a
+wrong anchor also fails \emph{confidently}, emitting a clean typed path --- so the
+interpretability benefit inverts into a liability when the graph or the anchor is
+wrong. Any deployment should treat a returned path as a claim to be checked, not as
+proof.
+
+\paragraph{Where the sheaf idea might still live.} Section~\ref{sec:sheaf-negative}
+shows the residual fails at path \emph{discrimination}. It was moderately effective at
+detecting wrong relation labels and wrong endpoints in a controlled setting, which is a
+\emph{verification} question rather than a retrieval one: given a claimed triple or
+chain, is it consistent with the graph? That framing needs neither extraction nor entity
+linking, and is where we would look next --- with neural stalks, and without assuming
+the answer.
+
+\paragraph{Limitations.} Single-node; no clustering, sharding or replication. Pure
+Python. No dense-retrieval baseline. Evaluated on one external dataset; HotpotQA and
+MuSiQue loaders are not written. The LLM extractor and LLM linker are implemented but
+unmeasured.
+
+\section{Conclusion}
+
+Knowledge has direction, and metric-ranked retrieval cannot represent direction. That
+observation is sound, and typed traversal exploits it: under oracle entity linking,
+CookiX reaches hits@10 $0.580$ against BM25's $0.386$ on 2WikiMultiHopQA and recovers
+the gold relation chain on most answered questions. But an end-to-end system must find
+its own anchor and build its own graph, and there CookiX reaches parity with a 1994
+lexical baseline rather than beating it. Extraction and linking, not traversal, are what
+stand between the two numbers.
+
+Of the two exotic layers that made NoVectDB sound like a new paradigm, one has never
+moved a metric and the other now has a measured negative result with a structural
+explanation. We report this because a paradigm claim that survives only by not being
+tested is not worth making. What remains is narrower and, we think, more useful: typed
+relational retrieval is a real complement to vector search for a specific class of
+question, it can return the path that justifies an answer, and the honest frontier is
+upstream --- in turning text into edges, and questions into anchors.
+
+\begin{thebibliography}{99}
+
+\bibitem{lewis2020retrieval}
+P.~Lewis et al.
+\newblock Retrieval-augmented generation for knowledge-intensive NLP tasks.
+\newblock \emph{NeurIPS}, 2020.
+
+\bibitem{vershynin2018high}
+R.~Vershynin.
+\newblock \emph{High-Dimensional Probability}.
+\newblock Cambridge University Press, 2018.
+
+\bibitem{edelsbrunner2010computational}
+H.~Edelsbrunner and J.~L. Harer.
+\newblock \emph{Computational Topology: An Introduction}.
+\newblock American Mathematical Society, 2010.
+
+\bibitem{curry2014sheaves}
+J.~Curry.
+\newblock Sheaves, cosheaves and applications.
+\newblock arXiv:1303.3255, 2014.
+
+\bibitem{hansen2019toward}
+J.~Hansen and R.~Ghrist.
+\newblock Toward a spectral theory of cellular sheaves.
+\newblock \emph{Journal of Applied and Computational Topology}, 3(4):315--358, 2019.
+
+\bibitem{bodnar2022neural}
+C.~Bodnar, F.~Di~Giovanni, B.~Chamberlain, P.~Liò, and M.~Bronstein.
+\newblock Neural sheaf diffusion: a topological perspective on heterophily and
+oversmoothing in GNNs.
+\newblock \emph{NeurIPS}, 2022.
+
+\bibitem{edge2024local}
+D.~Edge et al.
+\newblock From local to global: a GraphRAG approach to query-focused summarization.
+\newblock arXiv:2404.16130, 2024.
+
+\bibitem{bordes2013translating}
+A.~Bordes, N.~Usunier, A.~Garcia-Durán, J.~Weston, and O.~Yakhnenko.
+\newblock Translating embeddings for modeling multi-relational data.
+\newblock \emph{NeurIPS}, 2013.
+
+\bibitem{trouillon2016complex}
+T.~Trouillon, J.~Welbl, S.~Riedel, É.~Gaussier, and G.~Bouchard.
+\newblock Complex embeddings for simple link prediction.
+\newblock \emph{ICML}, 2016.
+
+\bibitem{sun2019rotate}
+Z.~Sun, Z.-H. Deng, J.-Y. Nie, and J.~Tang.
+\newblock RotatE: knowledge graph embedding by relational rotation in complex space.
+\newblock \emph{ICLR}, 2019.
+
+\bibitem{malkov2018efficient}
+Y.~A. Malkov and D.~A. Yashunin.
+\newblock Efficient and robust approximate nearest neighbor search using HNSW graphs.
+\newblock \emph{IEEE TPAMI}, 42(4):824--836, 2018.
+
+\bibitem{ho2020constructing}
+X.~Ho, A.-K. Duong~Nguyen, S.~Sugawara, and A.~Aizawa.
+\newblock Constructing a multi-hop QA dataset for comprehensive evaluation of reasoning
+steps.
+\newblock \emph{COLING}, 2020.
+
+\bibitem{robertson2009probabilistic}
+S.~Robertson and H.~Zaragoza.
+\newblock The probabilistic relevance framework: BM25 and beyond.
+\newblock \emph{Foundations and Trends in Information Retrieval}, 3(4):333--389, 2009.
+
+\end{thebibliography}
+
+\end{document}
