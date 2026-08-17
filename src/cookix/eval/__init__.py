@@ -66,6 +66,14 @@ from .perf import (
     to_markdown_scale,
 )
 from .report import to_json, to_markdown
+from .sheaf_probe import (
+    Chain,
+    FamilyScore,
+    SheafProbeReport,
+    run_sheaf_probe,
+    text_stalks,
+    to_markdown_sheaf_probe,
+)
 from .sheaf_study import SheafAblation, run_sheaf_ablation, to_markdown_sheaf
 
 __all__ = [
@@ -92,6 +100,12 @@ __all__ = [
     "SheafAblation",
     "run_sheaf_ablation",
     "to_markdown_sheaf",
+    "Chain",
+    "FamilyScore",
+    "SheafProbeReport",
+    "run_sheaf_probe",
+    "text_stalks",
+    "to_markdown_sheaf_probe",
     "PerfReport",
     "PerfRow",
     "run_perf_benchmark",

@@ -70,6 +70,18 @@ def _cmd_serve(args: argparse.Namespace) -> int:
 
 
 def _cmd_eval(args: argparse.Namespace) -> int:
+    if args.sheaf_probe:
+        from .eval import load_2wiki, run_sheaf_probe, to_markdown_sheaf_probe
+
+        if not args.path:
+            print("error: --sheaf-probe requires --path to a 2Wiki-schema JSON "
+                  "(the dev split, or tests/fixtures/twowiki_sample.json to smoke-test).")
+            return 2
+        ds = load_2wiki(args.path, limit=args.limit)
+        report = run_sheaf_probe(ds, dim=args.dim, seed=args.seed)
+        print(to_markdown_sheaf_probe(report))
+        return 0
+
     if args.dataset:
         from .eval import load_2wiki, run_dataset_eval, to_markdown_dataset
 
@@ -172,6 +184,11 @@ def main(argv: list[str] | None = None) -> int:
                     help="run the extraction-quality study instead of retrieval")
     ev.add_argument("--llm", action="store_true",
                     help="with --extraction, also score the LLM extractor (needs an API key)")
+    ev.add_argument("--sheaf-probe", action="store_true",
+                    help="test whether the sheaf residual separates gold reasoning "
+                         "chains from corrupted ones (needs --path)")
+    ev.add_argument("--dim", type=int, default=64,
+                    help="stalk dimension for --sheaf-probe (default: 64)")
     ev.add_argument("--sheaf", action="store_true",
                     help="run the learned-sheaf residual ablation instead of retrieval")
     ev.add_argument("--perf", action="store_true",
